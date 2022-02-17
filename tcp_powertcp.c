@@ -39,7 +39,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 	/* get info for inet_diag (optional) */
 	.get_info = 0 /* optional */,
 
-	.name = "PowerTCP",
+	.name = "powertcp",
 	.owner = THIS_MODULE,
 
 	/* initialize private data (optional) */
