@@ -1,4 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0 OR MIT
+/*
+ * PowerTCP congestion control
+ *
+ * Based on the algorithm developed in:
+ *    Addanki, V., O. Michel, and S. Schmid.
+ *    "PowerTCP: Pushing the Performance Limits of Datacenter Networks."
+ *    19th USENIX Symposium on Networked Systems Design and Implementation (NSDI 22).
+ *    USENIX Association, 2022.
+ * Available at: https://arxiv.org/pdf/2112.14309.pdf
+ *
+ * Implemented by:
+ *   Jörn-Thorben Hinz, TU Berlin, 2022.
+ */
 #include <linux/init.h>
 #include <linux/module.h>
 #include <net/tcp.h>
