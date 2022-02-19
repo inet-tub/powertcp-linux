@@ -15,6 +15,7 @@
 
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <net/tcp.h>
 
 /*
@@ -97,6 +98,120 @@ function UPDATE_WINDOW(power, ack):
 	return cwnd
 */
 
+enum powertcp_variant {
+	POWERTCP_POWERTCP = 0,
+	POWERTCP_RTTPOWERTCP = 1,
+};
+
+struct powertcp {
+	union {
+		struct {
+			// TODO: Add variant-specific members as needed.
+		} ptcp;
+		struct {
+			// TODO: Add variant-specific members as needed.
+		} rttptcp;
+	};
+
+	//tbd (*norm_power)(ack);
+	//tbd (*update_old)(cwnd, ack);
+	//tbd (*update_window)(power, ack);
+
+	// TODO: Add common members as needed.
+};
+
+// TODO: Check what's a sensible default for beta.
+// TODO: Automatically calculate the value for beta, based on the recommendation
+// in sec. 3.3, Parameters. Maybe take the expected number of flows N in an
+// additional parameter.
+static int beta = 1000;
+static int gamma = 900;
+// TODO: Don't force selection of an algorithm variant. Ideally detect what's
+// possible on e.g. the first received ACK or even SYN(ACK)---with or without
+// INT.
+static int variant = POWERTCP_POWERTCP;
+
+module_param(beta, int, 0444);
+MODULE_PARM_DESC(beta, "additive increase");
+module_param(gamma, int, 0444);
+MODULE_PARM_DESC(
+	gamma,
+	"exponential moving average weight, times 1000 (default: 900 = 0,9)");
+module_param(variant, int, 0444);
+MODULE_PARM_DESC(
+	variant,
+	"algorithm variant to use (0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
+
+/*
+static void ptcp_norm_power(ack)
+{
+}
+*/
+
+/*
+static void ptcp_update_old(power, ack)
+{
+}
+*/
+
+/*
+static void ptcp_update_window(cwnd, ack)
+{
+}
+*/
+
+/*
+static void rttptcp_norm_power(ack)
+{
+}
+*/
+
+/*
+static void rttptcp_update_old(power, ack)
+{
+}
+*/
+
+/*
+static void rttptcp_update_window(cwnd, ack)
+{
+}
+*/
+
+static void powertcp_init(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	if (variant != POWERTCP_RTTPOWERTCP) {
+		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
+		//ca->norm_power = ptcp_norm_power;
+		//ca->update_old = ptcp_update_old;
+		//ca->update_window = ptcp_update_window;
+	} else {
+		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
+		//ca->norm_power = rttptcp_norm_power;
+		//ca->update_old = rttptcp_update_old;
+		//ca->update_window = rttptcp_update_window;
+	}
+}
+
+static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
+{
+	/* cong_control, if assigned in tcp_congestion_ops, becomes the main
+	 * congestion control function and responsible for setting cwnd, rate and
+	 * so on (if I'm not mistaken).
+	*/
+
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	// NOTE: Just based on the pseudo-code, might actually be done slightly
+	// different in real code:
+	//tbd cwnd_old = get_cwnd(); // this is likely just tcp_sock.snd_cwnd
+	//tbd norm_power = ca->norm_power(ack argument);
+	//tbd cwnd = ca->update_window(norm_power, cwnd_old);
+	//tbd ca->update_old(cwnd, ack);
+}
+
 static struct tcp_congestion_ops powertcp __read_mostly = {
 	/* return slow start threshold (required) */
 	.ssthresh = 0 /* required */,
@@ -121,7 +236,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 
 	/* call when packets are delivered to update cwnd and pacing rate, after all
 	 * the ca_state processing. (optional) */
-	.cong_control = 0 /* optional */,
+	.cong_control = powertcp_cong_control,
 
 	/* new value of cwnd after loss (required) */
 	.undo_cwnd = 0 /* required */,
@@ -137,7 +252,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 	.owner = THIS_MODULE,
 
 	/* initialize private data (optional) */
-	.init = 0 /* optional */,
+	.init = powertcp_init,
 
 	/* cleanup private data  (optional) */
 	.release = 0 /* optional */,
@@ -145,6 +260,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 
 static int __init powertcp_register(void)
 {
+	BUILD_BUG_ON(sizeof(struct powertcp) > ICSK_CA_PRIV_SIZE);
 	return tcp_register_congestion_control(&powertcp);
 }
 
