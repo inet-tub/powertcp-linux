@@ -132,7 +132,7 @@ static int gamma = 900;
 static int variant = POWERTCP_POWERTCP;
 
 module_param(beta, int, 0444);
-MODULE_PARM_DESC(beta, "additive increase");
+MODULE_PARM_DESC(beta, "additive increase (default: 1000)");
 module_param(gamma, int, 0444);
 MODULE_PARM_DESC(
 	gamma,
@@ -140,7 +140,7 @@ MODULE_PARM_DESC(
 module_param(variant, int, 0444);
 MODULE_PARM_DESC(
 	variant,
-	"algorithm variant to use (0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
+	"algorithm variant to use (default: 0; 0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
 
 /*
 static void ptcp_norm_power(ack)
