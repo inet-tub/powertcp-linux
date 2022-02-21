@@ -110,15 +110,21 @@ struct powertcp {
 		} ptcp;
 		struct {
 			// TODO: Add variant-specific members as needed.
+			u32 last_updated;
+			long prev_rtt_us;
 		} rttptcp;
 	};
 
-	//tbd (*norm_power)(ack);
-	//tbd (*update_old)(cwnd, ack);
-	//tbd (*update_window)(power, ack);
+	// TODO: Choose (more) appropriate (return) types if necessary:
+	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
+			   long base_rtt_us);
+	void (*update_old)(struct sock *sk, u32 cwnd,
+			   const struct rate_sample *rs);
 
 	// TODO: Add common members as needed.
 };
+
+#define POWERTCP_GAMMA_SCALE 1000
 
 // TODO: Check what's a sensible default for beta.
 // TODO: Automatically calculate the value for beta, based on the recommendation
@@ -142,41 +148,57 @@ MODULE_PARM_DESC(
 	variant,
 	"algorithm variant to use (default: 0; 0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
 
-/*
-static void ptcp_norm_power(ack)
+static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
+			    long base_rtt_us)
 {
+	return 0;
 }
-*/
 
-/*
-static void ptcp_update_old(power, ack)
+static void ptcp_update_old(struct sock *sk, u32 cwnd,
+			    const struct rate_sample *rs)
 {
 }
-*/
 
-/*
-static void ptcp_update_window(cwnd, ack)
+static long rttptcp_norm_power(const struct sock *sk,
+			       const struct rate_sample *rs, long base_rtt_us)
 {
-}
-*/
+	const struct powertcp *ca = inet_csk_ca(sk);
 
-/*
-static void rttptcp_norm_power(ack)
-{
+	// TODO: Prefer using double here?
+	// TODO: Is interval_us really the right value?
+	long dt = rs->interval_us;
+	long rtt_grad = (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
+	long p_norm = (rtt_grad + 1) * rs->rtt_us / base_rtt_us;
+	// TODO: Is dt correct here below? Re-read the paper!
+	// TODO: The first p_norm is actually p_smooth in the paper. Re-read the paper!
+	long p_smooth =
+		(p_norm * (base_rtt_us - dt) + (p_norm * dt)) / base_rtt_us;
+	return p_smooth;
 }
-*/
 
-/*
-static void rttptcp_update_old(power, ack)
+static void rttptcp_update_old(struct sock *sk, u32 cwnd,
+			       const struct rate_sample *rs)
 {
-}
-*/
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 
-/*
-static void rttptcp_update_window(cwnd, ack)
-{
+	// TODO: Look for the last ACK'ed sequence:
+	long ack_seq = 42;
+	if (ack_seq < ca->rttptcp.last_updated) {
+		return;
+	}
+
+	ca->rttptcp.last_updated = tp->snd_nxt;
 }
-*/
+
+static u32 update_window(struct tcp_sock *tp, u32 cwnd_old, long norm_power)
+{
+	u32 cwnd = (gamma * (cwnd_old / norm_power + beta) +
+		    (POWERTCP_GAMMA_SCALE - gamma) * cwnd_old) /
+		   POWERTCP_GAMMA_SCALE;
+	tp->snd_cwnd = cwnd;
+	return cwnd;
+}
 
 static void powertcp_init(struct sock *sk)
 {
@@ -184,14 +206,12 @@ static void powertcp_init(struct sock *sk)
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
-		//ca->norm_power = ptcp_norm_power;
-		//ca->update_old = ptcp_update_old;
-		//ca->update_window = ptcp_update_window;
+		ca->norm_power = ptcp_norm_power;
+		ca->update_old = ptcp_update_old;
 	} else {
 		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
-		//ca->norm_power = rttptcp_norm_power;
-		//ca->update_old = rttptcp_update_old;
-		//ca->update_window = rttptcp_update_window;
+		ca->norm_power = rttptcp_norm_power;
+		ca->update_old = rttptcp_update_old;
 	}
 }
 
@@ -203,13 +223,27 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+	u32 cwnd_old;
+	long norm_power;
+	u32 cwnd;
+	unsigned long rate;
 
-	// NOTE: Just based on the pseudo-code, might actually be done slightly
+	long base_rtt_us = tcp_min_rtt(tp);
+	if (base_rtt_us == ~0) {
+		// TODO: rate_sample.rtt_us might be -1, doesn't it? What to do then?
+		// Maybe see what bbr_init_pacing_rate_from_rtt() does.
+		base_rtt_us = rs->rtt_us;
+	}
+
+	// NOTE: Mostly based on the pseudo-code, might actually be done slightly
 	// different in real code:
-	//tbd cwnd_old = get_cwnd(); // this is likely just tcp_sock.snd_cwnd
-	//tbd norm_power = ca->norm_power(ack argument);
-	//tbd cwnd = ca->update_window(norm_power, cwnd_old);
-	//tbd ca->update_old(cwnd, ack);
+	cwnd_old = tp->snd_cwnd; // this is likely just tcp_sock.snd_cwnd
+	norm_power = ca->norm_power(sk, rs, base_rtt_us);
+	cwnd = update_window(tp, norm_power, cwnd_old);
+	rate = cwnd / base_rtt_us;
+	sk->sk_pacing_rate = rate;
+	ca->update_old(sk, cwnd, rs);
 }
 
 static struct tcp_congestion_ops powertcp __read_mostly = {
