@@ -252,6 +252,13 @@ static u32 powertcp_ssthresh(struct sock *sk)
 	return TCP_INFINITE_SSTHRESH;
 }
 
+static u32 powertcp_undo_cwnd(struct sock *sk)
+{
+	/* Never undo after a loss. */
+	// TODO: Or do we?
+	return tcp_sk(sk)->snd_cwnd;
+}
+
 static struct tcp_congestion_ops powertcp __read_mostly = {
 	.ssthresh = powertcp_ssthresh,
 
@@ -277,8 +284,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 	 * the ca_state processing. (optional) */
 	.cong_control = powertcp_cong_control,
 
-	/* new value of cwnd after loss (required) */
-	.undo_cwnd = 0 /* required */,
+	.undo_cwnd = powertcp_undo_cwnd,
 
 	/* returns the multiplier used in tcp_sndbuf_expand (optional) */
 	.sndbuf_expand = 0 /* optional */,
