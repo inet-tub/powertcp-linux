@@ -246,9 +246,14 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	ca->update_old(sk, cwnd, rs);
 }
 
+static u32 powertcp_ssthresh(struct sock *sk)
+{
+	/* We don't do slow starts here! */
+	return TCP_INFINITE_SSTHRESH;
+}
+
 static struct tcp_congestion_ops powertcp __read_mostly = {
-	/* return slow start threshold (required) */
-	.ssthresh = 0 /* required */,
+	.ssthresh = powertcp_ssthresh,
 
 	/* do new cwnd calculation (required) */
 	.cong_avoid = 0 /* required */,
