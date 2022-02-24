@@ -203,6 +203,11 @@ static u32 update_window(struct tcp_sock *tp, u32 cwnd_old, long norm_power)
 static void powertcp_init(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	// TODO: We are supposed to send at the NIC's bandwidth in the first RTT.
+	// How to get that value? sk_max_pacing_rate is not it.
+	sk->sk_pacing_rate = sk->sk_max_pacing_rate;
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
@@ -212,6 +217,7 @@ static void powertcp_init(struct sock *sk)
 		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
 		ca->norm_power = rttptcp_norm_power;
 		ca->update_old = rttptcp_update_old;
+		ca->rttptcp.last_updated = tp->snd_una;
 	}
 }
 
