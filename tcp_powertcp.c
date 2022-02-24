@@ -121,6 +121,11 @@ struct powertcp {
 	void (*update_old)(struct sock *sk, u32 cwnd,
 			   const struct rate_sample *rs);
 
+	// powertcp_cong_control() seems to (unexpectedly) get called once before
+	// powertcp_init(). Remember whether we did the initialization.
+	// TODO: Check, why that's the case.
+	bool initialized;
+
 	// TODO: Add common members as needed.
 };
 
@@ -219,6 +224,8 @@ static void powertcp_init(struct sock *sk)
 		ca->update_old = rttptcp_update_old;
 		ca->rttptcp.last_updated = tp->snd_una;
 	}
+
+	ca->initialized = true;
 }
 
 static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
@@ -234,8 +241,12 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	long norm_power;
 	u32 cwnd;
 	unsigned long rate;
-
 	long base_rtt_us = tcp_min_rtt(tp);
+
+	if (unlikely(!ca->initialized)) {
+		return;
+	}
+
 	if (base_rtt_us == ~0) {
 		// TODO: rate_sample.rtt_us might be -1, doesn't it? What to do then?
 		// Maybe see what bbr_init_pacing_rate_from_rtt() does.
