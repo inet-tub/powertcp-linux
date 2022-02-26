@@ -100,8 +100,7 @@ function UPDATE_WINDOW(power, ack):
 	return cwnd
 */
 
-#define BASE_RTT_US 500
-
+#define FALLBACK_BASE_RTT_US 500
 #define FALLBACK_HOST_BW 1000 /* Mbit/s */
 
 #define NORM_POWER_SCALE (1 << 16)
@@ -240,8 +239,12 @@ static void powertcp_init(struct sock *sk)
 		}
 	}
 
+	if (base_rtt_us == ~0) {
+		base_rtt_us = FALLBACK_BASE_RTT_US;
+	}
+
 	sk->sk_pacing_rate = BITS_TO_BYTES(MEGA * host_bw);
-	tp->snd_cwnd = sk->sk_pacing_rate * BASE_RTT_US / USEC_PER_SEC;
+	tp->snd_cwnd = sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC;
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
@@ -254,7 +257,8 @@ static void powertcp_init(struct sock *sk)
 		ca->rttptcp.last_updated = tp->snd_una;
 	}
 
-	pr_debug("initialized: cwnd=%u host_bw=%lu \n", tp->snd_cwnd, host_bw);
+	pr_debug("initialized: cwnd=%u base_rtt_us=%u host_bw=%lu \n",
+		 tp->snd_cwnd, base_rtt_us, host_bw);
 
 	ca->initialized = true;
 }
