@@ -138,11 +138,8 @@ struct powertcp {
 
 #define POWERTCP_GAMMA_SCALE (1 << 10)
 
-// TODO: Check what's a sensible default for beta.
-// TODO: Automatically calculate the value for beta, based on the recommendation
-// in sec. 3.3, Parameters. Maybe take the expected number of flows N in an
-// additional parameter.
-static int beta = 1000;
+static int beta = -1;
+static int expected_flows = 10;
 static int gamma = 0.9 * POWERTCP_GAMMA_SCALE;
 // TODO: Don't force selection of an algorithm variant. Ideally detect what's
 // possible on e.g. the first received ACK or even SYN(ACK)---with or without
@@ -150,7 +147,11 @@ static int gamma = 0.9 * POWERTCP_GAMMA_SCALE;
 static int variant = POWERTCP_POWERTCP;
 
 module_param(beta, int, 0444);
-MODULE_PARM_DESC(beta, "additive increase (default: 1000)");
+MODULE_PARM_DESC(beta,
+		 "additive increase (default: -1; -1: automatically set beta)");
+module_param(expected_flows, int, 0444);
+MODULE_PARM_DESC(expected_flows,
+		 "expected number of flows sharing the host NIC (default: 10)");
 module_param(gamma, int, 0444);
 MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
 				POWERTCP_GAMMA_SCALE) "(default: 921 ~= 0,9)");
@@ -254,6 +255,12 @@ static void powertcp_init(struct sock *sk)
 		ca->norm_power = rttptcp_norm_power;
 		ca->update_old = rttptcp_update_old;
 		ca->rttptcp.last_updated = tp->snd_una;
+	}
+
+	if (beta < 0) {
+		beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
+				     expected_flows / USEC_PER_SEC);
+		pr_debug("setting beta to %d\n", beta);
 	}
 
 	pr_debug("initialized: cwnd=%u base_rtt_us=%u host_bw=%lu \n",
