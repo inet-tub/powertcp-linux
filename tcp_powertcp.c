@@ -136,14 +136,14 @@ struct powertcp {
 	// TODO: Add common members as needed.
 };
 
-#define POWERTCP_GAMMA_SCALE 1000
+#define POWERTCP_GAMMA_SCALE (1 << 10)
 
 // TODO: Check what's a sensible default for beta.
 // TODO: Automatically calculate the value for beta, based on the recommendation
 // in sec. 3.3, Parameters. Maybe take the expected number of flows N in an
 // additional parameter.
 static int beta = 1000;
-static int gamma = 900;
+static int gamma = 0.9 * POWERTCP_GAMMA_SCALE;
 // TODO: Don't force selection of an algorithm variant. Ideally detect what's
 // possible on e.g. the first received ACK or even SYN(ACK)---with or without
 // INT.
@@ -152,9 +152,8 @@ static int variant = POWERTCP_POWERTCP;
 module_param(beta, int, 0444);
 MODULE_PARM_DESC(beta, "additive increase (default: 1000)");
 module_param(gamma, int, 0444);
-MODULE_PARM_DESC(
-	gamma,
-	"exponential moving average weight, times 1000 (default: 900 = 0,9)");
+MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
+				POWERTCP_GAMMA_SCALE) "(default: 921 ~= 0,9)");
 module_param(variant, int, 0444);
 MODULE_PARM_DESC(
 	variant,
