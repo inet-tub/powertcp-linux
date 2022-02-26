@@ -98,6 +98,9 @@ function UPDATE_WINDOW(power, ack):
 	return cwnd
 */
 
+#define BASE_RTT_US 500
+#define HOST_BW 1000000000
+
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
 	POWERTCP_RTTPOWERTCP = 1,
@@ -212,7 +215,8 @@ static void powertcp_init(struct sock *sk)
 
 	// TODO: We are supposed to send at the NIC's bandwidth in the first RTT.
 	// How to get that value? sk_max_pacing_rate is not it.
-	sk->sk_pacing_rate = sk->sk_max_pacing_rate;
+	sk->sk_pacing_rate = HOST_BW / BITS_PER_BYTE;
+	tp->snd_cwnd = sk->sk_pacing_rate * BASE_RTT_US / USEC_PER_SEC;
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
@@ -258,7 +262,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd_old = tp->snd_cwnd; // this is likely just tcp_sock.snd_cwnd
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
 	cwnd = update_window(tp, norm_power, cwnd_old);
-	rate = cwnd / base_rtt_us;
+	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	sk->sk_pacing_rate = rate;
 	ca->update_old(sk, cwnd, rs);
 }
