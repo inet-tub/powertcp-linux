@@ -13,9 +13,11 @@
  *   Jörn-Thorben Hinz, TU Berlin, 2022.
  */
 
+#include <linux/ethtool.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/units.h>
 #include <net/tcp.h>
 
 /*
@@ -99,7 +101,8 @@ function UPDATE_WINDOW(power, ack):
 */
 
 #define BASE_RTT_US 500
-#define HOST_BW 1000000000
+
+#define FALLBACK_HOST_BW 1000 /* Mbit/s */
 
 #define NORM_POWER_SCALE (1 << 16)
 
@@ -216,9 +219,28 @@ static void powertcp_init(struct sock *sk)
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	// TODO: We are supposed to send at the NIC's bandwidth in the first RTT.
-	// How to get that value? sk_max_pacing_rate is not it.
-	sk->sk_pacing_rate = HOST_BW / BITS_PER_BYTE;
+	u32 base_rtt_us = tcp_min_rtt(tp);
+
+	unsigned long host_bw = FALLBACK_HOST_BW;
+	const struct dst_entry *dst = __sk_dst_get(sk);
+	if (dst && dst->dev) {
+		struct ethtool_link_ksettings cmd;
+		int r;
+
+		rtnl_lock();
+		/* ethtool_params_from_link_mode() would be even simpler.
+		 * But dst->dev->link_mode seems to always be 0 at this point. */
+		r = __ethtool_get_link_ksettings(dst->dev, &cmd);
+		rtnl_unlock();
+		if (r == 0 && cmd.base.speed != SPEED_UNKNOWN) {
+			host_bw = cmd.base.speed;
+			pr_debug("got link speed: %lu Mbit/s\n", host_bw);
+		} else {
+			pr_warn("link speed unavailable\n");
+		}
+	}
+
+	sk->sk_pacing_rate = BITS_TO_BYTES(MEGA * host_bw);
 	tp->snd_cwnd = sk->sk_pacing_rate * BASE_RTT_US / USEC_PER_SEC;
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
@@ -231,6 +253,8 @@ static void powertcp_init(struct sock *sk)
 		ca->update_old = rttptcp_update_old;
 		ca->rttptcp.last_updated = tp->snd_una;
 	}
+
+	pr_debug("initialized: cwnd=%u host_bw=%lu \n", tp->snd_cwnd, host_bw);
 
 	ca->initialized = true;
 }
