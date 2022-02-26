@@ -268,6 +268,11 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	sk->sk_pacing_rate = rate;
 	ca->update_old(sk, cwnd, rs);
+
+	pr_debug(
+		"cwnd_old=%u base_rtt_us=%ld norm_power*%d=%ld cwnd=%u rate=%lu \n",
+		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd,
+		rate);
 }
 
 static u32 powertcp_ssthresh(struct sock *sk)
