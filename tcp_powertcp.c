@@ -101,6 +101,8 @@ function UPDATE_WINDOW(power, ack):
 #define BASE_RTT_US 500
 #define HOST_BW 1000000000
 
+#define NORM_POWER_SCALE (1 << 16)
+
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
 	POWERTCP_RTTPOWERTCP = 1,
@@ -175,8 +177,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 	// TODO: Prefer using double here?
 	// TODO: Is interval_us really the right value?
 	long dt = rs->interval_us;
-	long rtt_grad = (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
-	long p_norm = (rtt_grad + 1) * rs->rtt_us / base_rtt_us;
+	long rtt_grad =
+		NORM_POWER_SCALE * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
+	long p_norm = (rtt_grad + NORM_POWER_SCALE) * rs->rtt_us / base_rtt_us;
 	// TODO: Is dt correct here below? Re-read the paper!
 	// TODO: The first p_norm is actually p_smooth in the paper. Re-read the paper!
 	long p_smooth =
@@ -201,7 +204,7 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 
 static u32 update_window(struct tcp_sock *tp, u32 cwnd_old, long norm_power)
 {
-	u32 cwnd = (gamma * (cwnd_old / norm_power + beta) +
+	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
 		    (POWERTCP_GAMMA_SCALE - gamma) * cwnd_old) /
 		   POWERTCP_GAMMA_SCALE;
 	tp->snd_cwnd = cwnd;
