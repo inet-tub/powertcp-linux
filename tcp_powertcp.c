@@ -135,6 +135,8 @@ struct powertcp {
 	// TODO: Check, why that's the case.
 	bool initialized;
 
+	int beta;
+
 	// TODO: Add common members as needed.
 };
 
@@ -206,7 +208,8 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 	ca->rttptcp.last_updated = tp->snd_nxt;
 }
 
-static u32 update_window(struct tcp_sock *tp, u32 cwnd_old, long norm_power)
+static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
+			 long norm_power)
 {
 	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
 		    (POWERTCP_GAMMA_SCALE - gamma) * cwnd_old) /
@@ -260,9 +263,11 @@ static void powertcp_init(struct sock *sk)
 	}
 
 	if (beta < 0) {
-		beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
-				     expected_flows / USEC_PER_SEC);
-		pr_debug("setting beta to %d\n", beta);
+		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
+					 expected_flows / USEC_PER_SEC);
+		pr_debug("setting beta to %d\n", ca->beta);
+	} else {
+		ca->beta = beta;
 	}
 
 	pr_debug("initialized: cwnd=%u base_rtt_us=%u host_bw=%lu \n",
@@ -300,7 +305,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	// different in real code:
 	cwnd_old = tp->snd_cwnd; // this is likely just tcp_sock.snd_cwnd
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
-	cwnd = update_window(tp, norm_power, cwnd_old);
+	cwnd = update_window(tp, ca->beta, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	sk->sk_pacing_rate = rate;
 	ca->update_old(sk, cwnd, rs);
