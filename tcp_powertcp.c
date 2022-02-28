@@ -102,7 +102,6 @@ function UPDATE_WINDOW(power, ack):
 	return cwnd
 */
 
-#define FALLBACK_BASE_RTT_US 500
 #define FALLBACK_HOST_BW 1000 /* Mbit/s */
 
 #define NORM_POWER_SCALE (1 << 16)
@@ -164,6 +163,24 @@ MODULE_PARM_DESC(
 	variant,
 	"algorithm variant to use (default: 0; 0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
 
+/* Look for the base (~= minimum) RTT (in us). */
+static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
+{
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	u32 min_rtt = tcp_min_rtt(tp);
+	if (likely(min_rtt != ~0U)) {
+		return min_rtt;
+	}
+
+	if (rs && rs->rtt_us != -1L) {
+		return rs->rtt_us;
+	}
+
+	/* bbr_init_pacing_rate_from_rtt() also uses this as fallback. */
+	return USEC_PER_SEC;
+}
+
 static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 			    long base_rtt_us)
 {
@@ -222,8 +239,7 @@ static void powertcp_init(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-
-	u32 base_rtt_us = tcp_min_rtt(tp);
+	long base_rtt_us = base_rtt(sk, NULL);
 
 	unsigned long host_bw = FALLBACK_HOST_BW;
 	const struct dst_entry *dst = __sk_dst_get(sk);
@@ -242,10 +258,6 @@ static void powertcp_init(struct sock *sk)
 		} else {
 			pr_warn("link speed unavailable\n");
 		}
-	}
-
-	if (base_rtt_us == ~0) {
-		base_rtt_us = FALLBACK_BASE_RTT_US;
 	}
 
 	sk->sk_pacing_rate = BITS_TO_BYTES(MEGA * host_bw);
@@ -270,7 +282,7 @@ static void powertcp_init(struct sock *sk)
 		ca->beta = beta;
 	}
 
-	pr_debug("initialized: cwnd=%u base_rtt_us=%u host_bw=%lu \n",
+	pr_debug("initialized: cwnd=%u base_rtt_us=%lu host_bw=%lu \n",
 		 tp->snd_cwnd, base_rtt_us, host_bw);
 
 	ca->initialized = true;
@@ -289,17 +301,13 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	long norm_power;
 	u32 cwnd;
 	unsigned long rate;
-	long base_rtt_us = tcp_min_rtt(tp);
+	long base_rtt_us;
 
 	if (unlikely(!ca->initialized)) {
 		return;
 	}
 
-	if (base_rtt_us == ~0) {
-		// TODO: rate_sample.rtt_us might be -1, doesn't it? What to do then?
-		// Maybe see what bbr_init_pacing_rate_from_rtt() does.
-		base_rtt_us = rs->rtt_us;
-	}
+	base_rtt_us = base_rtt(sk, rs);
 
 	// NOTE: Mostly based on the pseudo-code, might actually be done slightly
 	// different in real code:
