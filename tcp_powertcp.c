@@ -13,6 +13,8 @@
  *   Jörn-Thorben Hinz, TU Berlin, 2022.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include <linux/ethtool.h>
 #include <linux/init.h>
 #include <linux/module.h>
