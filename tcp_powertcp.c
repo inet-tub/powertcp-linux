@@ -225,13 +225,18 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 	ca->rttptcp.last_updated = tp->snd_nxt;
 }
 
+static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
+{
+	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
+}
+
 static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
 			 long norm_power)
 {
 	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
 		    (POWERTCP_GAMMA_SCALE - gamma) * cwnd_old) /
 		   POWERTCP_GAMMA_SCALE;
-	tp->snd_cwnd = cwnd;
+	set_cwnd(tp, cwnd);
 	return cwnd;
 }
 
@@ -261,7 +266,7 @@ static void powertcp_init(struct sock *sk)
 	}
 
 	sk->sk_pacing_rate = BITS_TO_BYTES(MEGA * host_bw);
-	tp->snd_cwnd = sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC;
+	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
