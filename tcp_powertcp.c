@@ -225,6 +225,12 @@ static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
 	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
 }
 
+/* Set the socket pacing rate (bytes per second). */
+static void set_rate(struct sock *sk, unsigned long rate)
+{
+	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+}
+
 /* Update the list of recent snd_cwnds. */
 static void update_old(struct sock *sk)
 {
@@ -354,7 +360,8 @@ static void powertcp_init(struct sock *sk)
 		}
 	}
 
-	sk->sk_pacing_rate = BITS_TO_BYTES(MEGA * host_bw);
+	/* Set the rate first, the initialization of snd_cwnd already uses it. */
+	set_rate(sk, BITS_TO_BYTES(MEGA * host_bw));
 	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
@@ -411,7 +418,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
 	cwnd = update_window(tp, ca->beta, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
-	sk->sk_pacing_rate = rate;
+	set_rate(sk, rate);
 	ca->update_old(sk, cwnd, rs);
 
 	pr_debug(
