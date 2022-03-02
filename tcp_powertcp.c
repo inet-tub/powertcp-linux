@@ -322,18 +322,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 
 static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
-	const struct tcp_sock *tp = tcp_sk(sk);
-
-	// TODO: Look for the last ACK'ed sequence:
-	long ack_seq = 42;
-	if (ack_seq < ca->rttptcp.last_updated) {
-		return;
-	}
+	// TODO: Remember t_c and RTT as appropriate.
 
 	update_old(sk);
-
-	ca->rttptcp.last_updated = tp->snd_nxt;
 }
 
 static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
