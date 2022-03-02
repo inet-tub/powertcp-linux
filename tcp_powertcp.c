@@ -391,7 +391,7 @@ static void powertcp_init(struct sock *sk)
 		ca->norm_power = rttptcp_norm_power;
 		ca->update_old = rttptcp_update_old;
 		ca->update_window = rttptcp_update_window;
-		ca->rttptcp.last_updated = tp->snd_una;
+		ca->rttptcp.last_updated = tp->snd_nxt;
 	}
 
 	if (beta < 0) {
