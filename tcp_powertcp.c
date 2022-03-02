@@ -220,6 +220,11 @@ static u32 get_cwnd(const struct sock *sk)
 	return cwnd_old;
 }
 
+static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
+{
+	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
+}
+
 /* Update the list of recent snd_cwnds. */
 static void update_old(struct sock *sk)
 {
@@ -268,6 +273,16 @@ static void update_old(struct sock *sk)
 	}
 }
 
+static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
+			 long norm_power)
+{
+	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
+		    (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
+		   POWERTCP_GAMMA_SCALE;
+	set_cwnd(tp, cwnd);
+	return cwnd;
+}
+
 static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 			    long base_rtt_us)
 {
@@ -312,21 +327,6 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 	update_old(sk);
 
 	ca->rttptcp.last_updated = tp->snd_nxt;
-}
-
-static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
-{
-	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
-}
-
-static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
-			 long norm_power)
-{
-	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
-		    (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
-		   POWERTCP_GAMMA_SCALE;
-	set_cwnd(tp, cwnd);
-	return cwnd;
 }
 
 static void powertcp_init(struct sock *sk)
