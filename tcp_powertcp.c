@@ -138,6 +138,7 @@ struct powertcp {
 			   long base_rtt_us);
 	void (*update_old)(struct sock *sk, u32 cwnd,
 			   const struct rate_sample *rs);
+	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
 
 	// powertcp_cong_control() seems to (unexpectedly) get called once before
 	// powertcp_init(). Remember whether we did the initialization.
@@ -279,12 +280,15 @@ static void update_old(struct sock *sk)
 	}
 }
 
-static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
-			 long norm_power)
+static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 {
-	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
-		    (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
-		   POWERTCP_GAMMA_SCALE;
+	const struct powertcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	u32 cwnd =
+		(gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + ca->beta) +
+		 (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
+		POWERTCP_GAMMA_SCALE;
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -335,6 +339,19 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 	ca->rttptcp.last_updated = tp->snd_nxt;
 }
 
+static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return tp->snd_cwnd;
+	}
+
+	ca->rttptcp.last_updated = tp->snd_nxt;
+	return update_window(sk, cwnd_old, norm_power);
+}
+
 static void powertcp_init(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -368,10 +385,12 @@ static void powertcp_init(struct sock *sk)
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
 		ca->norm_power = ptcp_norm_power;
 		ca->update_old = ptcp_update_old;
+		ca->update_window = update_window;
 	} else {
 		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
 		ca->norm_power = rttptcp_norm_power;
 		ca->update_old = rttptcp_update_old;
+		ca->update_window = rttptcp_update_window;
 		ca->rttptcp.last_updated = tp->snd_una;
 	}
 
@@ -399,7 +418,6 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
-	struct tcp_sock *tp = tcp_sk(sk);
 	u32 cwnd_old;
 	long norm_power;
 	u32 cwnd;
@@ -416,7 +434,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	// different in real code:
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
-	cwnd = update_window(tp, ca->beta, norm_power, cwnd_old);
+	cwnd = ca->update_window(sk, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
 	ca->update_old(sk, cwnd, rs);
