@@ -17,8 +17,10 @@
 
 #include <linux/ethtool.h>
 #include <linux/init.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/types.h>
 #include <linux/units.h>
 #include <net/tcp.h>
 
@@ -111,7 +113,15 @@ enum powertcp_variant {
 	POWERTCP_RTTPOWERTCP = 1,
 };
 
+struct old_cwnd {
+	u32 snd_nxt;
+	u32 cwnd;
+	struct list_head list;
+};
+
 struct powertcp {
+	// TODO: Sort members in a cache-friendly way if necessary.
+
 	union {
 		struct {
 			// TODO: Add variant-specific members as needed.
@@ -135,6 +145,10 @@ struct powertcp {
 	bool initialized;
 
 	int beta;
+
+	// TODO: Investigate if this frequently updated list decreases performance
+	// and another data structure would improve that.
+	struct list_head old_cwnds;
 
 	// TODO: Add common members as needed.
 };
@@ -181,6 +195,79 @@ static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
 	return USEC_PER_SEC;
 }
 
+/* Return the snd_cwnd that was set when the newly acknowledged segment(s) were
+ * sent.
+ */
+static u32 get_cwnd(const struct sock *sk)
+{
+	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	/* Use the current cwnd initially or if looking for this ack_seq comes up
+	 * empty:
+	 */
+	u32 cwnd_old = tp->snd_cwnd;
+	u32 ack_seq = tp->snd_una;
+
+	struct old_cwnd *old_cwnd;
+	list_for_each_entry (old_cwnd, &ca->old_cwnds, list) {
+		if (!before(old_cwnd->snd_nxt, ack_seq)) {
+			break;
+		}
+		cwnd_old = old_cwnd->cwnd;
+	}
+
+	return cwnd_old;
+}
+
+/* Update the list of recent snd_cwnds. */
+static void update_old(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	u32 ack_seq = tp->snd_una;
+	u32 cwnd = tp->snd_cwnd;
+	u32 snd_nxt = tp->snd_nxt;
+
+	struct old_cwnd *n;
+	struct old_cwnd *to_del = NULL;
+
+	/* Remember the current snd_cwnd if snd_nxt did advance. Update the already
+	 * remembered snd_cwnd for this snd_nxt otherwise (assuming snd_nxt does
+	 * never *decrease* logically).
+	 */
+	struct old_cwnd *old_cwnd =
+		!list_empty(&ca->old_cwnds) ?
+			      list_last_entry(&ca->old_cwnds, struct old_cwnd, list) :
+			      NULL;
+	if (!old_cwnd || before(old_cwnd->snd_nxt, snd_nxt)) {
+		old_cwnd = kmalloc(sizeof(*old_cwnd), GFP_KERNEL);
+		if (old_cwnd) {
+			list_add_tail(&old_cwnd->list, &ca->old_cwnds);
+		}
+	}
+
+	if (old_cwnd) {
+		old_cwnd->snd_nxt = snd_nxt;
+		old_cwnd->cwnd = cwnd;
+	}
+
+	/* Drop old snd_cwnds whos snd_nxt is strictly before the new ack_seq,
+	 * meaning they have been used in a transmission.
+	 */
+	list_for_each_entry_safe (old_cwnd, n, &ca->old_cwnds, list) {
+		if (!before(old_cwnd->snd_nxt, ack_seq)) {
+			break;
+		}
+		if (to_del) {
+			list_del(&to_del->list);
+			kfree(to_del);
+		}
+		to_del = old_cwnd;
+	}
+}
+
 static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 			    long base_rtt_us)
 {
@@ -222,6 +309,8 @@ static void rttptcp_update_old(struct sock *sk, u32 cwnd,
 		return;
 	}
 
+	update_old(sk);
+
 	ca->rttptcp.last_updated = tp->snd_nxt;
 }
 
@@ -234,7 +323,7 @@ static u32 update_window(struct tcp_sock *tp, int beta, u32 cwnd_old,
 			 long norm_power)
 {
 	u32 cwnd = (gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + beta) +
-		    (POWERTCP_GAMMA_SCALE - gamma) * cwnd_old) /
+		    (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
 		   POWERTCP_GAMMA_SCALE;
 	set_cwnd(tp, cwnd);
 	return cwnd;
@@ -287,6 +376,8 @@ static void powertcp_init(struct sock *sk)
 		ca->beta = beta;
 	}
 
+	INIT_LIST_HEAD(&ca->old_cwnds);
+
 	pr_debug("initialized: cwnd=%u base_rtt_us=%lu host_bw=%lu \n",
 		 tp->snd_cwnd, base_rtt_us, host_bw);
 
@@ -316,7 +407,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 
 	// NOTE: Mostly based on the pseudo-code, might actually be done slightly
 	// different in real code:
-	cwnd_old = tp->snd_cwnd; // this is likely just tcp_sock.snd_cwnd
+	cwnd_old = get_cwnd(sk);
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
 	cwnd = update_window(tp, ca->beta, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
