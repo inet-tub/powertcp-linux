@@ -220,6 +220,32 @@ static u32 get_cwnd(const struct sock *sk)
 	return cwnd_old;
 }
 
+/* Look for the host bandwidth (in Mbit/s). */
+static unsigned long get_host_bw(struct sock *sk)
+{
+	const struct dst_entry *dst = __sk_dst_get(sk);
+	unsigned long bw = FALLBACK_HOST_BW;
+
+	if (dst && dst->dev) {
+		struct ethtool_link_ksettings cmd;
+		int r;
+
+		rtnl_lock();
+		/* ethtool_params_from_link_mode() would be even simpler.
+		 * But dst->dev->link_mode seems to always be 0 at this point. */
+		r = __ethtool_get_link_ksettings(dst->dev, &cmd);
+		rtnl_unlock();
+		if (r == 0 && cmd.base.speed != SPEED_UNKNOWN) {
+			bw = cmd.base.speed;
+			pr_debug("got link speed: %lu Mbit/s\n", bw);
+		} else {
+			pr_warn("link speed unavailable\n");
+		}
+	}
+
+	return bw;
+}
+
 static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
 {
 	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
@@ -346,24 +372,7 @@ static void powertcp_init(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	long base_rtt_us = base_rtt(sk, NULL);
 
-	unsigned long host_bw = FALLBACK_HOST_BW;
-	const struct dst_entry *dst = __sk_dst_get(sk);
-	if (dst && dst->dev) {
-		struct ethtool_link_ksettings cmd;
-		int r;
-
-		rtnl_lock();
-		/* ethtool_params_from_link_mode() would be even simpler.
-		 * But dst->dev->link_mode seems to always be 0 at this point. */
-		r = __ethtool_get_link_ksettings(dst->dev, &cmd);
-		rtnl_unlock();
-		if (r == 0 && cmd.base.speed != SPEED_UNKNOWN) {
-			host_bw = cmd.base.speed;
-			pr_debug("got link speed: %lu Mbit/s\n", host_bw);
-		} else {
-			pr_warn("link speed unavailable\n");
-		}
-	}
+	unsigned long host_bw = get_host_bw(sk);
 
 	/* Set the rate first, the initialization of snd_cwnd already uses it. */
 	set_rate(sk, BITS_TO_BYTES(MEGA * host_bw));
