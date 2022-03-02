@@ -349,7 +349,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs)
 {
 	// TODO: Remember t_c and RTT as appropriate.
+	struct powertcp *ca = inet_csk_ca(sk);
 
+	ca->rttptcp.prev_rtt_us = rs->rtt_us;
 	update_old(sk);
 }
 
