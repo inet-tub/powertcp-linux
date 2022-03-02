@@ -136,8 +136,7 @@ struct powertcp {
 	// TODO: Choose (more) appropriate (return) types if necessary:
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
-	void (*update_old)(struct sock *sk, u32 cwnd,
-			   const struct rate_sample *rs);
+	void (*update_old)(struct sock *sk, const struct rate_sample *rs);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
 
 	// powertcp_cong_control() seems to (unexpectedly) get called once before
@@ -299,8 +298,7 @@ static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	return 0;
 }
 
-static void ptcp_update_old(struct sock *sk, u32 cwnd,
-			    const struct rate_sample *rs)
+static void ptcp_update_old(struct sock *sk, const struct rate_sample *rs)
 {
 }
 
@@ -322,8 +320,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 	return p_smooth;
 }
 
-static void rttptcp_update_old(struct sock *sk, u32 cwnd,
-			       const struct rate_sample *rs)
+static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -437,7 +434,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd = ca->update_window(sk, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
-	ca->update_old(sk, cwnd, rs);
+	ca->update_old(sk, rs);
 
 	pr_debug(
 		"cwnd_old=%u base_rtt_us=%ld norm_power*%d=%ld cwnd=%u rate=%lu \n",
