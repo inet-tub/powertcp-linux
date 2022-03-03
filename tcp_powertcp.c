@@ -396,7 +396,7 @@ static void powertcp_init(struct sock *sk)
 	if (beta < 0) {
 		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
 					 expected_flows / USEC_PER_SEC);
-		pr_debug("setting beta to %d\n", ca->beta);
+		pr_debug("automatically setting beta to %d\n", ca->beta);
 	} else {
 		ca->beta = beta;
 	}
