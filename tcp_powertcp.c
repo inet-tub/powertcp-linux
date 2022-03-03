@@ -344,6 +344,11 @@ static long rttptcp_norm_power(const struct sock *sk,
 	// TODO: The first p_norm is actually p_smooth in the paper. Re-read the paper!
 	long p_smooth =
 		(p_norm * (base_rtt_us - dt) + (p_norm * dt)) / base_rtt_us;
+
+	pr_debug("dt=%ldus rtt_grad=%ld p_norm*%d=%ld p_smooth*%d=%ld\n", dt,
+		 rtt_grad, NORM_POWER_SCALE, p_norm, NORM_POWER_SCALE,
+		 p_smooth);
+
 	return p_smooth;
 }
 
