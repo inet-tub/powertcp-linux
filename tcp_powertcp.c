@@ -350,9 +350,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
 			base_rtt_us;
 
-	pr_debug("dt=%ldus rtt_grad=%ld p_norm*%d=%ld p_smooth*%d=%ld\n", dt,
-		 rtt_grad, NORM_POWER_SCALE, p_norm, NORM_POWER_SCALE,
-		 p_smooth);
+	pr_debug("dt=%ld us, rtt_grad*%d=%ld, p_norm*%d=%ld, p_smooth*%d=%ld\n",
+		 dt, NORM_POWER_SCALE, rtt_grad, NORM_POWER_SCALE, p_norm,
+		 NORM_POWER_SCALE, p_smooth);
 
 	return p_smooth;
 }
@@ -414,7 +414,7 @@ static void powertcp_init(struct sock *sk)
 	if (beta < 0) {
 		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
 					 expected_flows / USEC_PER_SEC);
-		pr_debug("automatically setting beta to %d\n", ca->beta);
+		pr_debug("automatically setting beta to %d bytes\n", ca->beta);
 	} else {
 		ca->beta = beta;
 	}
@@ -423,8 +423,9 @@ static void powertcp_init(struct sock *sk)
 
 	ca->p_smooth = 1;
 
-	pr_debug("initialized: cwnd=%u base_rtt_us=%lu host_bw=%lu \n",
-		 tp->snd_cwnd, base_rtt_us, host_bw);
+	pr_debug(
+		"initialized: cwnd=%u bytes, base_rtt=%lu us, host_bw=%lu Mbit/s\n",
+		tp->snd_cwnd, base_rtt_us, host_bw);
 
 	ca->initialized = true;
 }
@@ -459,7 +460,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	ca->update_old(sk, rs, norm_power);
 
 	pr_debug(
-		"cwnd_old=%u base_rtt_us=%ld norm_power*%d=%ld cwnd=%u rate=%lu \n",
+		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%d=%ld, cwnd=%u bytes, rate=%lu bytes/s\n",
 		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd,
 		rate);
 }
