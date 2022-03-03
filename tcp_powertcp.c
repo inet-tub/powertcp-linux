@@ -130,6 +130,7 @@ struct powertcp {
 			// TODO: Add variant-specific members as needed.
 			u32 last_updated;
 			long prev_rtt_us;
+			u64 t_prev;
 		} rttptcp;
 	};
 
@@ -339,14 +340,13 @@ static long rttptcp_norm_power(const struct sock *sk,
 			       const struct rate_sample *rs, long base_rtt_us)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 
 	// TODO: Prefer using double here?
-	// TODO: Is interval_us really the right value?
-	long dt = rs->interval_us;
+	long dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	long rtt_grad =
 		NORM_POWER_SCALE * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
 	long p_norm = (rtt_grad + NORM_POWER_SCALE) * rs->rtt_us / base_rtt_us;
-	// TODO: Is dt correct here below? Re-read the paper!
 	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
 			base_rtt_us;
 
@@ -372,6 +372,8 @@ static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 
 	ca->rttptcp.last_updated = tp->snd_nxt;
 	ca->rttptcp.prev_rtt_us = rs->rtt_us;
+	// TODO: There are multiple timestamps available here. Is there a better one?
+	ca->rttptcp.t_prev = tp->tcp_mstamp;
 }
 
 static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
@@ -409,6 +411,7 @@ static void powertcp_init(struct sock *sk)
 		ca->update_old = rttptcp_update_old;
 		ca->update_window = rttptcp_update_window;
 		ca->rttptcp.last_updated = tp->snd_nxt;
+		ca->rttptcp.t_prev = tp->tcp_mstamp;
 	}
 
 	if (beta < 0) {
