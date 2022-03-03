@@ -136,7 +136,8 @@ struct powertcp {
 	// TODO: Choose (more) appropriate (return) types if necessary:
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
-	void (*update_old)(struct sock *sk, const struct rate_sample *rs);
+	void (*update_old)(struct sock *sk, const struct rate_sample *rs,
+			   long p_smooth);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
 
 	// powertcp_cong_control() seems to (unexpectedly) get called once before
@@ -149,6 +150,8 @@ struct powertcp {
 	// TODO: Investigate if this frequently updated list decreases performance
 	// and another data structure would improve that.
 	struct list_head old_cwnds;
+
+	long p_smooth;
 
 	// TODO: Add common members as needed.
 };
@@ -259,7 +262,7 @@ static void set_rate(struct sock *sk, unsigned long rate)
 }
 
 /* Update the list of recent snd_cwnds. */
-static void update_old(struct sock *sk)
+static void update_old(struct sock *sk, long p_smooth)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -304,6 +307,8 @@ static void update_old(struct sock *sk)
 		}
 		to_del = old_cwnd;
 	}
+
+	ca->p_smooth = p_smooth;
 }
 
 static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
@@ -325,7 +330,8 @@ static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	return 0;
 }
 
-static void ptcp_update_old(struct sock *sk, const struct rate_sample *rs)
+static void ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
+			    long p_smooth)
 {
 }
 
@@ -341,9 +347,8 @@ static long rttptcp_norm_power(const struct sock *sk,
 		NORM_POWER_SCALE * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
 	long p_norm = (rtt_grad + NORM_POWER_SCALE) * rs->rtt_us / base_rtt_us;
 	// TODO: Is dt correct here below? Re-read the paper!
-	// TODO: The first p_norm is actually p_smooth in the paper. Re-read the paper!
-	long p_smooth =
-		(p_norm * (base_rtt_us - dt) + (p_norm * dt)) / base_rtt_us;
+	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
+			base_rtt_us;
 
 	pr_debug("dt=%ldus rtt_grad=%ld p_norm*%d=%ld p_smooth*%d=%ld\n", dt,
 		 rtt_grad, NORM_POWER_SCALE, p_norm, NORM_POWER_SCALE,
@@ -352,17 +357,18 @@ static long rttptcp_norm_power(const struct sock *sk,
 	return p_smooth;
 }
 
-static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs)
+static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
+			       long p_smooth)
 {
 	// TODO: Remember t_c and RTT as appropriate.
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	update_old(sk);
-
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
 		return;
 	}
+
+	update_old(sk, p_smooth);
 
 	ca->rttptcp.last_updated = tp->snd_nxt;
 	ca->rttptcp.prev_rtt_us = rs->rtt_us;
@@ -415,6 +421,8 @@ static void powertcp_init(struct sock *sk)
 
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
+	ca->p_smooth = 1;
+
 	pr_debug("initialized: cwnd=%u base_rtt_us=%lu host_bw=%lu \n",
 		 tp->snd_cwnd, base_rtt_us, host_bw);
 
@@ -448,7 +456,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd = ca->update_window(sk, norm_power, cwnd_old);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
-	ca->update_old(sk, rs);
+	ca->update_old(sk, rs, norm_power);
 
 	pr_debug(
 		"cwnd_old=%u base_rtt_us=%ld norm_power*%d=%ld cwnd=%u rate=%lu \n",
