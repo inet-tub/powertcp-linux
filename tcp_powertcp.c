@@ -411,6 +411,7 @@ static void powertcp_init(struct sock *sk)
 		ca->update_old = rttptcp_update_old;
 		ca->update_window = rttptcp_update_window;
 		ca->rttptcp.last_updated = tp->snd_nxt;
+		ca->rttptcp.prev_rtt_us = base_rtt_us;
 		ca->rttptcp.t_prev = tp->tcp_mstamp;
 	}
 
