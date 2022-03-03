@@ -356,9 +356,16 @@ static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs)
 {
 	// TODO: Remember t_c and RTT as appropriate.
 	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 
-	ca->rttptcp.prev_rtt_us = rs->rtt_us;
 	update_old(sk);
+
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return;
+	}
+
+	ca->rttptcp.last_updated = tp->snd_nxt;
+	ca->rttptcp.prev_rtt_us = rs->rtt_us;
 }
 
 static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
@@ -370,7 +377,6 @@ static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 		return tp->snd_cwnd;
 	}
 
-	ca->rttptcp.last_updated = tp->snd_nxt;
 	return update_window(sk, cwnd_old, norm_power);
 }
 
