@@ -239,7 +239,8 @@ static unsigned long get_host_bw(struct sock *sk)
 			bw = cmd.base.speed;
 			pr_debug("got link speed: %lu Mbit/s\n", bw);
 		} else {
-			pr_warn("link speed unavailable\n");
+			pr_warn("link speed unavailable, using fallback: %lu Mbit/s\n",
+				bw);
 		}
 	}
 
