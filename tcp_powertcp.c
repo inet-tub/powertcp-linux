@@ -127,14 +127,12 @@ struct powertcp {
 			// TODO: Add variant-specific members as needed.
 		} ptcp;
 		struct {
-			// TODO: Add variant-specific members as needed.
 			u32 last_updated;
 			long prev_rtt_us;
 			u64 t_prev;
 		} rttptcp;
 	};
 
-	// TODO: Choose (more) appropriate (return) types if necessary:
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
 	void (*update_old)(struct sock *sk, const struct rate_sample *rs,
@@ -153,8 +151,6 @@ struct powertcp {
 	struct list_head old_cwnds;
 
 	long p_smooth;
-
-	// TODO: Add common members as needed.
 };
 
 #define POWERTCP_GAMMA_SCALE (1 << 10)
@@ -342,7 +338,6 @@ static long rttptcp_norm_power(const struct sock *sk,
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	// TODO: Prefer using double here?
 	long dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	long rtt_grad =
 		NORM_POWER_SCALE * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
@@ -360,7 +355,6 @@ static long rttptcp_norm_power(const struct sock *sk,
 static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			       long p_smooth)
 {
-	// TODO: Remember t_c and RTT as appropriate.
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
@@ -437,8 +431,7 @@ static void powertcp_init(struct sock *sk)
 static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 {
 	/* cong_control, if assigned in tcp_congestion_ops, becomes the main
-	 * congestion control function and responsible for setting cwnd, rate and
-	 * so on (if I'm not mistaken).
+	 * congestion control function and is responsible for setting cwnd and rate.
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -495,47 +488,13 @@ static u32 powertcp_undo_cwnd(struct sock *sk)
 }
 
 static struct tcp_congestion_ops powertcp __read_mostly = {
-	.ssthresh = powertcp_ssthresh,
-
-	/* do new cwnd calculation (required) */
-	.cong_avoid = 0 /* required */,
-
-	/* call before changing ca_state (optional) */
-	.set_state = 0 /* optional */,
-
-	/* call when cwnd event occurs (optional) */
-	.cwnd_event = 0 /* optional */,
-
-	/* call when ack arrives (optional) */
-	.in_ack_event = 0 /* optional */,
-
-	/* hook for packet ack accounting (optional) */
-	.pkts_acked = 0 /* optional */,
-
-	/* override sysctl_tcp_min_tso_segs */
-	.min_tso_segs = 0 /* optional */,
-
-	/* call when packets are delivered to update cwnd and pacing rate, after all
-	 * the ca_state processing. (optional) */
 	.cong_control = powertcp_cong_control,
-
-	.undo_cwnd = powertcp_undo_cwnd,
-
-	/* returns the multiplier used in tcp_sndbuf_expand (optional) */
-	.sndbuf_expand = 0 /* optional */,
-
-	/* control/slow paths put last */
-	/* get info for inet_diag (optional) */
-	.get_info = 0 /* optional */,
-
+	.init = powertcp_init,
 	.name = "powertcp",
 	.owner = THIS_MODULE,
-
-	/* initialize private data (optional) */
-	.init = powertcp_init,
-
-	/* cleanup private data  (optional) */
 	.release = powertcp_release,
+	.ssthresh = powertcp_ssthresh,
+	.undo_cwnd = powertcp_undo_cwnd,
 };
 
 static int __init powertcp_register(void)
