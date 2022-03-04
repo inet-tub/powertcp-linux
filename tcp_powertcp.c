@@ -469,6 +469,18 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 		rate);
 }
 
+static void powertcp_release(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	struct old_cwnd *old_cwnd;
+	struct old_cwnd *tmp;
+	list_for_each_entry_safe (old_cwnd, tmp, &ca->old_cwnds, list) {
+		list_del(&old_cwnd->list);
+		kfree(old_cwnd);
+	}
+}
+
 static u32 powertcp_ssthresh(struct sock *sk)
 {
 	/* We don't do slow starts here! */
@@ -523,7 +535,7 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 	.init = powertcp_init,
 
 	/* cleanup private data  (optional) */
-	.release = 0 /* optional */,
+	.release = powertcp_release,
 };
 
 static int __init powertcp_register(void)
