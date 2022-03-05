@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+usage()
+{
+	printf "Usage: %s HOST PORT DATA_SIZE [REPEATS [DELAY]]\n" "$0"
+}
+
+if [ $# -lt 3 ]; then
+	printf "Missing arguments\n" >&2
+	usage >&2
+	exit 2
+fi
+
+host=$1
+port=$2
+bs=$3
+count=1
+repeats=${4:-1}
+delay=${5:-0}
+
+for i in $(seq 1 "$repeats"); do
+	dd bs="$bs" count="$count" if=/dev/urandom
+	[ $i = "$repeats" ] || sleep "$delay"
+done | netcat -q0 "$host" "$port"
