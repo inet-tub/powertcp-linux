@@ -106,7 +106,7 @@ function UPDATE_WINDOW(power, ack):
 
 #define FALLBACK_HOST_BW 1000 /* Mbit/s */
 
-#define NORM_POWER_SCALE (1 << 16)
+#define NORM_POWER_SCALE (1L << 16)
 
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
@@ -345,9 +345,10 @@ static long rttptcp_norm_power(const struct sock *sk,
 	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
 			base_rtt_us;
 
-	pr_debug("dt=%ld us, rtt_grad*%d=%ld, p_norm*%d=%ld, p_smooth*%d=%ld\n",
-		 dt, NORM_POWER_SCALE, rtt_grad, NORM_POWER_SCALE, p_norm,
-		 NORM_POWER_SCALE, p_smooth);
+	pr_debug(
+		"dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
+		dt, NORM_POWER_SCALE, rtt_grad, NORM_POWER_SCALE, p_norm,
+		NORM_POWER_SCALE, p_smooth);
 
 	return p_smooth;
 }
@@ -457,7 +458,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	ca->update_old(sk, rs, norm_power);
 
 	pr_debug(
-		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%d=%ld, cwnd=%u bytes, rate=%lu bytes/s\n",
+		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s\n",
 		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd,
 		rate);
 }
