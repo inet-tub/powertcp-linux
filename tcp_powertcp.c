@@ -135,6 +135,7 @@ struct powertcp {
 
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
+	void (*reset)(struct sock *sk, long base_rtt_us);
 	void (*update_old)(struct sock *sk, const struct rate_sample *rs,
 			   long p_smooth);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
@@ -193,6 +194,17 @@ static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
 
 	/* bbr_init_pacing_rate_from_rtt() also uses this as fallback. */
 	return USEC_PER_SEC;
+}
+
+static void clear_old_cwnds(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	struct old_cwnd *old_cwnd;
+	struct old_cwnd *tmp;
+	list_for_each_entry_safe (old_cwnd, tmp, &ca->old_cwnds, list) {
+		list_del(&old_cwnd->list);
+		kfree(old_cwnd);
+	}
 }
 
 /* Return the snd_cwnd that was set when the newly acknowledged segment(s) were
@@ -256,6 +268,38 @@ static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
 static void set_rate(struct sock *sk, unsigned long rate)
 {
 	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+}
+
+static void reset(struct sock *sk, long base_rtt_us)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+	unsigned long host_bw = get_host_bw(sk);
+
+	if (base_rtt_us == -1L) {
+		base_rtt_us = base_rtt(sk, NULL);
+	}
+
+	/* Set the rate first, the initialization of snd_cwnd already uses it. */
+	set_rate(sk, BITS_TO_BYTES(MEGA * host_bw));
+	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
+
+	if (beta < 0) {
+		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
+					 expected_flows / USEC_PER_SEC);
+		pr_debug("automatically setting beta to %d bytes\n", ca->beta);
+	} else {
+		ca->beta = beta;
+	}
+
+	ca->p_smooth = 1;
+
+	clear_old_cwnds(sk);
+
+	pr_debug(
+		"reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+		tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
+		sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
 }
 
 /* Update the list of recent snd_cwnds. */
@@ -353,6 +397,22 @@ static long rttptcp_norm_power(const struct sock *sk,
 	return p_smooth;
 }
 
+static void rttptcp_reset(struct sock *sk, long base_rtt_us)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (base_rtt_us == -1L) {
+		base_rtt_us = base_rtt(sk, NULL);
+	}
+
+	ca->rttptcp.last_updated = tp->snd_nxt;
+	ca->rttptcp.prev_rtt_us = base_rtt_us;
+	ca->rttptcp.t_prev = tp->tcp_mstamp;
+
+	reset(sk, base_rtt_us);
+}
+
 static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			       long p_smooth)
 {
@@ -383,50 +443,42 @@ static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	return update_window(sk, cwnd_old, norm_power);
 }
 
+void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	if (unlikely(!ca->initialized)) {
+		return;
+	}
+
+	if (ev == CA_EVENT_TX_START || ev == CA_EVENT_CWND_RESTART) {
+		ca->reset(sk, -1);
+	}
+}
+
 static void powertcp_init(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
-	struct tcp_sock *tp = tcp_sk(sk);
-	long base_rtt_us = base_rtt(sk, NULL);
-
-	unsigned long host_bw = get_host_bw(sk);
-
-	/* Set the rate first, the initialization of snd_cwnd already uses it. */
-	set_rate(sk, BITS_TO_BYTES(MEGA * host_bw));
-	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
 		ca->norm_power = ptcp_norm_power;
+		ca->reset = reset;
 		ca->update_old = ptcp_update_old;
 		ca->update_window = update_window;
 	} else {
 		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
 		ca->norm_power = rttptcp_norm_power;
+		ca->reset = rttptcp_reset;
 		ca->update_old = rttptcp_update_old;
 		ca->update_window = rttptcp_update_window;
-		ca->rttptcp.last_updated = tp->snd_nxt;
-		ca->rttptcp.prev_rtt_us = base_rtt_us;
-		ca->rttptcp.t_prev = tp->tcp_mstamp;
-	}
-
-	if (beta < 0) {
-		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
-					 expected_flows / USEC_PER_SEC);
-		pr_debug("automatically setting beta to %d bytes\n", ca->beta);
-	} else {
-		ca->beta = beta;
 	}
 
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
-	ca->p_smooth = 1;
-
-	pr_debug(
-		"initialized: cwnd=%u bytes, base_rtt=%lu us, host_bw=%lu Mbit/s\n",
-		tp->snd_cwnd, base_rtt_us, host_bw);
-
+	/* Must be already (marked) initialized for reset() to work: */
 	ca->initialized = true;
+	ca->reset(sk, -1);
 }
 
 static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
@@ -465,14 +517,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 
 static void powertcp_release(struct sock *sk)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
-
-	struct old_cwnd *old_cwnd;
-	struct old_cwnd *tmp;
-	list_for_each_entry_safe (old_cwnd, tmp, &ca->old_cwnds, list) {
-		list_del(&old_cwnd->list);
-		kfree(old_cwnd);
-	}
+	clear_old_cwnds(sk);
 }
 
 static u32 powertcp_ssthresh(struct sock *sk)
@@ -490,6 +535,7 @@ static u32 powertcp_undo_cwnd(struct sock *sk)
 
 static struct tcp_congestion_ops powertcp __read_mostly = {
 	.cong_control = powertcp_cong_control,
+	.cwnd_event = powertcp_cwnd_event,
 	.init = powertcp_init,
 	.name = "powertcp",
 	.owner = THIS_MODULE,
