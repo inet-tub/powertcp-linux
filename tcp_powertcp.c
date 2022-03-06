@@ -452,7 +452,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	// different in real code:
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->norm_power(sk, rs, base_rtt_us);
-	cwnd = ca->update_window(sk, norm_power, cwnd_old);
+	cwnd = ca->update_window(sk, cwnd_old, norm_power);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
 	ca->update_old(sk, rs, norm_power);
