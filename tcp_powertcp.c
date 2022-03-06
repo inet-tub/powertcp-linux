@@ -104,10 +104,6 @@ function UPDATE_WINDOW(power, ack):
 	return cwnd
 */
 
-#define FALLBACK_HOST_BW 1000 /* Mbit/s */
-
-#define NORM_POWER_SCALE (1L << 16)
-
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
 	POWERTCP_RTTPOWERTCP = 1,
@@ -154,11 +150,13 @@ struct powertcp {
 	long p_smooth;
 };
 
-#define POWERTCP_GAMMA_SCALE (1 << 10)
+static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
+static const long gamma_scale = (1L << 10);
+static const long norm_power_scale = (1L << 16);
 
 static int beta = -1;
 static int expected_flows = 10;
-static int gamma = 0.9 * POWERTCP_GAMMA_SCALE;
+static int gamma = 0.9 * gamma_scale;
 // TODO: Don't force selection of an algorithm variant. Ideally detect what's
 // possible on e.g. the first received ACK or even SYN(ACK)---with or without
 // INT.
@@ -172,7 +170,7 @@ MODULE_PARM_DESC(expected_flows,
 		 "expected number of flows sharing the host NIC (default: 10)");
 module_param(gamma, int, 0444);
 MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
-				POWERTCP_GAMMA_SCALE) "(default: 921 ~= 0,9)");
+				gamma_scale) "(default: 921 ~= 0,9)");
 module_param(variant, int, 0444);
 MODULE_PARM_DESC(
 	variant,
@@ -236,7 +234,7 @@ static u32 get_cwnd(const struct sock *sk)
 static unsigned long get_host_bw(struct sock *sk)
 {
 	const struct dst_entry *dst = __sk_dst_get(sk);
-	unsigned long bw = FALLBACK_HOST_BW;
+	unsigned long bw = fallback_host_bw;
 
 	if (dst && dst->dev) {
 		struct ethtool_link_ksettings cmd;
@@ -358,9 +356,9 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	u32 cwnd =
-		(gamma * (NORM_POWER_SCALE * cwnd_old / norm_power + ca->beta) +
-		 (POWERTCP_GAMMA_SCALE - gamma) * tp->snd_cwnd) /
-		POWERTCP_GAMMA_SCALE;
+		(gamma * (norm_power_scale * cwnd_old / norm_power + ca->beta) +
+		 (gamma_scale - gamma) * tp->snd_cwnd) /
+		gamma_scale;
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -384,15 +382,15 @@ static long rttptcp_norm_power(const struct sock *sk,
 
 	long dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	long rtt_grad =
-		NORM_POWER_SCALE * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
-	long p_norm = (rtt_grad + NORM_POWER_SCALE) * rs->rtt_us / base_rtt_us;
+		norm_power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
+	long p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
 	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
 			base_rtt_us;
 
 	pr_debug(
 		"dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
-		dt, NORM_POWER_SCALE, rtt_grad, NORM_POWER_SCALE, p_norm,
-		NORM_POWER_SCALE, p_smooth);
+		dt, norm_power_scale, rtt_grad, norm_power_scale, p_norm,
+		norm_power_scale, p_smooth);
 
 	return p_smooth;
 }
@@ -511,7 +509,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 
 	pr_debug(
 		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd, rate,
+		cwnd_old, base_rtt_us, norm_power_scale, norm_power, cwnd, rate,
 		rate * BITS_PER_BYTE / MEGA);
 }
 
