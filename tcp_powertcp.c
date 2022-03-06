@@ -458,9 +458,9 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	ca->update_old(sk, rs, norm_power);
 
 	pr_debug(
-		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s\n",
-		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd,
-		rate);
+		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+		cwnd_old, base_rtt_us, NORM_POWER_SCALE, norm_power, cwnd, rate,
+		rate * BITS_PER_BYTE / MEGA);
 }
 
 static void powertcp_release(struct sock *sk)
