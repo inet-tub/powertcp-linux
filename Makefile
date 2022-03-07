@@ -6,8 +6,8 @@ else
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
 
-.PHONY: modules clean
-modules clean:
+.PHONY: modules modules_install clean help
+modules modules_install clean help:
 	$(MAKE) -C $(KDIR) M=$$PWD $@
 
 endif
