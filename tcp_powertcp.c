@@ -515,6 +515,12 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 
 static void powertcp_release(struct sock *sk)
 {
+	const struct powertcp *ca = inet_csk_ca(sk);
+
+	if (unlikely(!ca->initialized)) {
+		return;
+	}
+
 	clear_old_cwnds(sk);
 }
 
