@@ -15,6 +15,8 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include "tcp_powertcp_debugfs.h"
+
 #include <linux/ethtool.h>
 #include <linux/init.h>
 #include <linux/list.h>
@@ -486,6 +488,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 cwnd_old;
 	long norm_power;
 	u32 cwnd;
@@ -511,6 +514,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
 		cwnd_old, base_rtt_us, norm_power_scale, norm_power, cwnd, rate,
 		rate * BITS_PER_BYTE / MEGA);
+	powertcp_debugfs_update(tp->snd_una, cwnd, rate);
 }
 
 static void powertcp_release(struct sock *sk)
@@ -550,12 +554,22 @@ static struct tcp_congestion_ops powertcp __read_mostly = {
 
 static int __init powertcp_register(void)
 {
+	int ret;
+
 	BUILD_BUG_ON(sizeof(struct powertcp) > ICSK_CA_PRIV_SIZE);
-	return tcp_register_congestion_control(&powertcp);
+
+	ret = tcp_register_congestion_control(&powertcp);
+	if (ret) {
+		return ret;
+	}
+
+	powertcp_debugfs_init();
+	return 0;
 }
 
 static void __exit powertcp_unregister(void)
 {
+	powertcp_debugfs_exit();
 	tcp_unregister_congestion_control(&powertcp);
 }
 
