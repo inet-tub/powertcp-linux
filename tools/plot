@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+
+
+COLUMNS = ("inet_id", "ack_seq", "cwnd", "rate")
+
+LABELS = {
+    "ack_seq": "ACK'ed sequence #",
+    "cwnd": "Congestion window",
+    "rate": "Transmission rate",
+}
+
+LIMITS = {
+    "rate": (0, 100 * 10 ** 9),
+}
+
+UNIT_FACTORS = {
+    "bit/s": 8,
+}
+
+UNITS = {
+    "cwnd": ("bytes",),
+    "rate": ("bytes/s", "bit/s"),
+}
+
+
+def check_unit(col, unit):
+    units = UNITS.get(col, (None,))
+    if unit is None:
+        unit = units[0]
+    if unit not in (None, *units):
+        raise LookupError(f"unit {unit} not available for {col}")
+    return unit
+
+
+def setup_axis(axis, col, unit):
+    axis.set_minor_locator(ticker.AutoMinorLocator())
+    if col == "ack_seq":
+        axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
+    elif col == "cwnd":
+        axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
+    elif col == "rate":
+        axis.set_major_formatter(ticker.EngFormatter(unit=unit))
+
+
+def main():
+    argparser = argparse.ArgumentParser(allow_abbrev=False)
+    argparser.add_argument("--fmt", default="-")
+    argparser.add_argument("--xmax", default=None, type=int)
+    argparser.add_argument("--xmin", default=None, type=int)
+    argparser.add_argument("--ymax", default=None, type=int)
+    argparser.add_argument("--ymin", default=None, type=int)
+    argparser.add_argument("--xunit")
+    argparser.add_argument("--yunit")
+    argparser.add_argument("csv_file", type=argparse.FileType("r"))
+    argparser.add_argument("x", choices=COLUMNS)
+    argparser.add_argument("y", choices=COLUMNS)
+
+    args = argparser.parse_args()
+
+    if args.x == args.y:
+        return "arguments x and y cannot be the same"
+
+    try:
+        args.xunit = check_unit(args.x, args.xunit)
+    except LookupError as e:
+        return e
+
+    try:
+        args.yunit = check_unit(args.y, args.yunit)
+    except LookupError as e:
+        return e
+
+    df = pd.read_csv(args.csv_file, usecols=(args.x, args.y))
+    df[args.x] *= UNIT_FACTORS.get(args.xunit, 1)
+    df[args.y] *= UNIT_FACTORS.get(args.yunit, 1)
+    df = df.set_index(args.x).loc[args.xmin : args.xmax]
+
+    fig, ax = plt.subplots()
+    ax.plot(df.index, df[args.y], args.fmt)
+    ax.set_xlabel(LABELS.get(args.x, args.x))
+    ax.set_ylabel(LABELS.get(args.y, args.y))
+    setup_axis(ax.xaxis, args.x, args.xunit)
+    setup_axis(ax.yaxis, args.y, args.yunit)
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
