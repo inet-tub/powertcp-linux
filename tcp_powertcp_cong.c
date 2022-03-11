@@ -134,7 +134,7 @@ struct powertcp {
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
 	void (*reset)(struct sock *sk, long base_rtt_us);
-	void (*update_old)(struct sock *sk, const struct rate_sample *rs,
+	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
 			   long p_smooth);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
 
@@ -303,7 +303,7 @@ static void reset(struct sock *sk, long base_rtt_us)
 }
 
 /* Update the list of recent snd_cwnds. */
-static void update_old(struct sock *sk, long p_smooth)
+static bool update_old(struct sock *sk, long p_smooth)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -350,6 +350,8 @@ static void update_old(struct sock *sk, long p_smooth)
 	}
 
 	ca->p_smooth = p_smooth;
+
+	return true;
 }
 
 static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
@@ -371,9 +373,10 @@ static long ptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	return 0;
 }
 
-static void ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
+static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			    long p_smooth)
 {
+	return false;
 }
 
 static long rttptcp_norm_power(const struct sock *sk,
@@ -381,13 +384,18 @@ static long rttptcp_norm_power(const struct sock *sk,
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
+	long dt, rtt_grad, p_norm, p_smooth;
 
-	long dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
-	long rtt_grad =
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return ca->p_smooth;
+	}
+
+	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
+	rtt_grad =
 		norm_power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
-	long p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
-	long p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
-			base_rtt_us;
+	p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
+	p_smooth = (ca->p_smooth * (base_rtt_us - dt) + (p_norm * dt)) /
+		   base_rtt_us;
 
 	pr_debug(
 		"dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
@@ -413,14 +421,14 @@ static void rttptcp_reset(struct sock *sk, long base_rtt_us)
 	reset(sk, base_rtt_us);
 }
 
-static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
+static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			       long p_smooth)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
-		return;
+		return false;
 	}
 
 	update_old(sk, p_smooth);
@@ -429,6 +437,8 @@ static void rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	ca->rttptcp.prev_rtt_us = rs->rtt_us;
 	// TODO: There are multiple timestamps available here. Is there a better one?
 	ca->rttptcp.t_prev = tp->tcp_mstamp;
+
+	return true;
 }
 
 static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
@@ -494,6 +504,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	u32 cwnd;
 	unsigned long rate;
 	long base_rtt_us;
+	bool updated;
 
 	if (unlikely(!ca->initialized)) {
 		return;
@@ -508,13 +519,15 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd = ca->update_window(sk, cwnd_old, norm_power);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
-	ca->update_old(sk, rs, norm_power);
+	updated = ca->update_old(sk, rs, norm_power);
 
-	pr_debug(
-		"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-		cwnd_old, base_rtt_us, norm_power_scale, norm_power, cwnd, rate,
-		rate * BITS_PER_BYTE / MEGA);
-	powertcp_debugfs_update(tp->snd_una, cwnd, rate);
+	if (updated) {
+		pr_debug(
+			"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+			cwnd_old, base_rtt_us, norm_power_scale, norm_power,
+			cwnd, rate, rate * BITS_PER_BYTE / MEGA);
+		powertcp_debugfs_update(tp->snd_una, cwnd, rate);
+	}
 }
 
 static void powertcp_release(struct sock *sk)
