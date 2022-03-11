@@ -133,7 +133,8 @@ void powertcp_debugfs_init(void)
 			    NULL, &powertcp_debugfs_stats_csv_fileops);
 }
 
-void powertcp_debugfs_update(u32 ack_seq, u32 cwnd, unsigned long rate)
+void powertcp_debugfs_update(u16 inet_id, u32 ack_seq, u32 cwnd,
+			     unsigned long rate)
 {
 	const char *str;
 	int len;
@@ -145,7 +146,8 @@ void powertcp_debugfs_update(u32 ack_seq, u32 cwnd, unsigned long rate)
 		return;
 	}
 
-	str = kasprintf(GFP_KERNEL, "%u,%u,%lu\n", ack_seq, cwnd, rate);
+	str = kasprintf(GFP_KERNEL, "%u,%u,%u,%lu\n", inet_id, ack_seq, cwnd,
+			rate);
 	if (unlikely(!str)) {
 		return;
 	}

@@ -196,6 +196,11 @@ static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
 	return USEC_PER_SEC;
 }
 
+static u16 sk_inet_id(const struct sock *sk)
+{
+	return inet_sk(sk)->inet_id;
+}
+
 static void clear_old_cwnds(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -249,7 +254,8 @@ static unsigned long get_host_bw(struct sock *sk)
 		rtnl_unlock();
 		if (r == 0 && cmd.base.speed != SPEED_UNKNOWN) {
 			bw = cmd.base.speed;
-			pr_debug("got link speed: %lu Mbit/s\n", bw);
+			pr_debug("inet_id=%u: got link speed: %lu Mbit/s\n",
+				 sk_inet_id(sk), bw);
 		} else {
 			pr_warn("link speed unavailable, using fallback: %lu Mbit/s\n",
 				bw);
@@ -287,7 +293,8 @@ static void reset(struct sock *sk, long base_rtt_us)
 	if (beta < 0) {
 		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
 					 expected_flows / USEC_PER_SEC);
-		pr_debug("automatically setting beta to %d bytes\n", ca->beta);
+		pr_debug("inet_id=%u: automatically setting beta to %d bytes\n",
+			 sk_inet_id(sk), ca->beta);
 	} else {
 		ca->beta = beta;
 	}
@@ -297,8 +304,8 @@ static void reset(struct sock *sk, long base_rtt_us)
 	clear_old_cwnds(sk);
 
 	pr_debug(
-		"reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-		tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
+		"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+		sk_inet_id(sk), tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
 		sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
 }
 
@@ -398,9 +405,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 		   base_rtt_us;
 
 	pr_debug(
-		"dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
-		dt, norm_power_scale, rtt_grad, norm_power_scale, p_norm,
-		norm_power_scale, p_smooth);
+		"inet_id=%u: dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
+		sk_inet_id(sk), dt, norm_power_scale, rtt_grad,
+		norm_power_scale, p_norm, norm_power_scale, p_smooth);
 
 	return p_smooth;
 }
@@ -522,11 +529,12 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	updated = ca->update_old(sk, rs, norm_power);
 
 	if (updated) {
+		u16 inet_id = sk_inet_id(sk);
 		pr_debug(
-			"cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-			cwnd_old, base_rtt_us, norm_power_scale, norm_power,
-			cwnd, rate, rate * BITS_PER_BYTE / MEGA);
-		powertcp_debugfs_update(tp->snd_una, cwnd, rate);
+			"inet_id=%u: cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+			inet_id, cwnd_old, base_rtt_us, norm_power_scale,
+			norm_power, cwnd, rate, rate * BITS_PER_BYTE / MEGA);
+		powertcp_debugfs_update(inet_id, tp->snd_una, cwnd, rate);
 	}
 }
 

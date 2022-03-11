@@ -15,7 +15,8 @@
 
 void powertcp_debugfs_exit(void);
 void powertcp_debugfs_init(void);
-void powertcp_debugfs_update(u32 ack_seq, u32 cwnd, unsigned long rate);
+void powertcp_debugfs_update(u16 inet_id, u32 ack_seq, u32 cwnd,
+			     unsigned long rate);
 
 #else
 
@@ -27,7 +28,7 @@ static inline void powertcp_debugfs_init(void)
 {
 }
 
-static inline void powertcp_debugfs_update(u32 ack_seq, u32 cwnd,
+static inline void powertcp_debugfs_update(u16 inet_id, u32 ack_seq, u32 cwnd,
 					   unsigned long rate)
 {
 }
