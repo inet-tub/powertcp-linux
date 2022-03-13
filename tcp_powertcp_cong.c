@@ -281,6 +281,7 @@ static void reset(struct sock *sk, long base_rtt_us)
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long host_bw = get_host_bw(sk);
+	u16 inet_id = sk_inet_id(sk);
 
 	if (base_rtt_us == -1L) {
 		base_rtt_us = base_rtt(sk, NULL);
@@ -305,8 +306,10 @@ static void reset(struct sock *sk, long base_rtt_us)
 
 	pr_debug(
 		"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-		sk_inet_id(sk), tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
+		inet_id, tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
 		sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
+	powertcp_debugfs_update(inet_id, tp->snd_una, tp->snd_cwnd,
+				sk->sk_pacing_rate);
 }
 
 /* Update the list of recent snd_cwnds. */
