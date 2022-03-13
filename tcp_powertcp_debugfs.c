@@ -29,6 +29,8 @@ struct powertcp_debugfs {
 	char csv_str[CSV_STR_LEN];
 };
 
+static const char *csv_header = "inet_id,ack_seq,cwnd,rate\n";
+
 // TODO: Move this as a dynamically allocated member to "struct powertcp"?
 static struct powertcp_debugfs dbgfs;
 
@@ -43,6 +45,13 @@ static int powertcp_debugfs_open(struct inode *inode, struct file *file)
 		ret = -EBUSY;
 		goto out;
 	}
+
+	dbgfs.fifo.head = 0;
+	dbgfs.fifo.tail = 0;
+	BUILD_BUG_ON(strlen(csv_header) > sizeof(dbgfs.csv_str));
+	strcpy(dbgfs.fifo.buf, csv_header);
+	dbgfs.fifo.head = (dbgfs.fifo.head + strlen(csv_header)) &
+			  (sizeof(dbgfs.csv_str) - 1);
 
 	dbgfs.open = true;
 	ret = nonseekable_open(inode, file);
