@@ -40,6 +40,20 @@ def check_unit(col, unit):
     return unit
 
 
+def set_lim(values, lim_min, lim_max, lim_func):
+    min_val = values.min()
+    max_val = values.max()
+    try:
+        lim_min = max(lim_min, min_val)
+    except TypeError:
+        lim_min = min_val
+    try:
+        lim_max = min(lim_max, max_val)
+    except TypeError:
+        lim_max = max_val
+    return lim_func(lim_min, lim_max)
+
+
 def setup_axis(axis, col, unit):
     axis.set_minor_locator(ticker.AutoMinorLocator())
     if col == "ack_seq":
@@ -108,6 +122,7 @@ def main():
     ax.set_ylabel(LABELS.get(args.y, args.y))
     setup_axis(ax.xaxis, args.x, args.xunit)
     setup_axis(ax.yaxis, args.y, args.yunit)
+    set_lim(df[args.y], args.ymin, args.ymax, ax.set_ylim)
 
     plt.show()
 
