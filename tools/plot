@@ -51,19 +51,38 @@ def setup_axis(axis, col, unit):
 
 
 def main():
-    argparser = argparse.ArgumentParser(allow_abbrev=False)
-    argparser.add_argument("--fmt", default="-")
-    argparser.add_argument("--xmax", default=None, type=int)
-    argparser.add_argument("--xmin", default=None, type=int)
-    argparser.add_argument("--ymax", default=None, type=int)
-    argparser.add_argument("--ymin", default=None, type=int)
-    argparser.add_argument("--xunit")
-    argparser.add_argument("--yunit")
-    argparser.add_argument("csv_file", type=argparse.FileType("r"))
-    argparser.add_argument("x", choices=COLUMNS)
-    argparser.add_argument("y", choices=COLUMNS)
+    early_argparser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    early_argparser.add_argument(
+        "--info",
+        action="store_true",
+        help="show information about the CSV file and exit",
+    )
+    early_args, remaining_argv = early_argparser.parse_known_args()
 
-    args = argparser.parse_args()
+    argparser = argparse.ArgumentParser(
+        add_help=True, allow_abbrev=False, parents=[early_argparser]
+    )
+    argparser.add_argument("csv_file", type=argparse.FileType("r"))
+
+    if not early_args.info:
+        argparser.add_argument("--fmt", default="-")
+        argparser.add_argument("--xmax", default=None, type=int)
+        argparser.add_argument("--xmin", default=None, type=int)
+        argparser.add_argument("--ymax", default=None, type=int)
+        argparser.add_argument("--ymin", default=None, type=int)
+        argparser.add_argument("--xunit")
+        argparser.add_argument("--yunit")
+        argparser.add_argument("x", choices=COLUMNS)
+        argparser.add_argument("y", choices=COLUMNS)
+
+    args = argparser.parse_args(remaining_argv, early_args)
+
+    if args.info:
+        df = pd.read_csv(args.csv_file)
+        pd.options.display.float_format = "{:.0f}".format
+        df.info()
+        print(f"\n{df.describe(percentiles=[])}")
+        return
 
     if args.x == args.y:
         return "arguments x and y cannot be the same"
