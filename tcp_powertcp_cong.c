@@ -499,6 +499,9 @@ static void powertcp_init(struct sock *sk)
 	/* Must be already (marked) initialized for reset() to work: */
 	ca->initialized = true;
 	ca->reset(sk, -1);
+
+	/* We do want sk_pacing_rate to be respected: */
+	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
 }
 
 static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
