@@ -211,6 +211,7 @@ static void reset(struct sock *sk, long base_rtt_us)
 	/* Set the rate first, the initialization of snd_cwnd already uses it. */
 	set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
 	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
+	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
 	if (beta < 0) {
 		ca->beta = BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
