@@ -37,6 +37,15 @@ struct old_cwnd {
 	struct list_head list;
 };
 
+struct powertcp_ops {
+	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
+			   long base_rtt_us);
+	void (*reset)(struct sock *sk, long base_rtt_us);
+	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
+			   long p_smooth);
+	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
+};
+
 struct powertcp {
 	// TODO: Sort members in a cache-friendly way if necessary.
 
@@ -51,12 +60,7 @@ struct powertcp {
 		} rttptcp;
 	};
 
-	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
-			   long base_rtt_us);
-	void (*reset)(struct sock *sk, long base_rtt_us);
-	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
-			   long p_smooth);
-	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
+	const struct powertcp_ops *ops;
 
 	// powertcp_cong_control() seems to (unexpectedly) get called once before
 	// powertcp_init(). Remember whether we did the initialization.
@@ -387,6 +391,20 @@ static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	return update_window(sk, cwnd_old, norm_power);
 }
 
+static const struct powertcp_ops ptcp_ops = {
+	.norm_power = ptcp_norm_power,
+	.reset = reset,
+	.update_old = ptcp_update_old,
+	.update_window = update_window,
+};
+
+static const struct powertcp_ops rttptcp_ops = {
+	.norm_power = rttptcp_norm_power,
+	.reset = rttptcp_reset,
+	.update_old = rttptcp_update_old,
+	.update_window = rttptcp_update_window,
+};
+
 void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -396,7 +414,7 @@ void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
 	}
 
 	if (ev == CA_EVENT_TX_START) {
-		ca->reset(sk, -1);
+		ca->ops->reset(sk, -1);
 	}
 }
 
@@ -406,16 +424,10 @@ static void powertcp_init(struct sock *sk)
 
 	if (variant != POWERTCP_RTTPOWERTCP) {
 		memset(&ca->ptcp, 0, sizeof(ca->ptcp));
-		ca->norm_power = ptcp_norm_power;
-		ca->reset = reset;
-		ca->update_old = ptcp_update_old;
-		ca->update_window = update_window;
+		ca->ops = &ptcp_ops;
 	} else {
 		memset(&ca->rttptcp, 0, sizeof(ca->rttptcp));
-		ca->norm_power = rttptcp_norm_power;
-		ca->reset = rttptcp_reset;
-		ca->update_old = rttptcp_update_old;
-		ca->update_window = rttptcp_update_window;
+		ca->ops = &rttptcp_ops;
 	}
 
 	ca->host_bw = get_host_bw(sk);
@@ -423,7 +435,7 @@ static void powertcp_init(struct sock *sk)
 
 	/* Must be already (marked) initialized for reset() to work: */
 	ca->initialized = true;
-	ca->reset(sk, -1);
+	ca->ops->reset(sk, -1);
 
 	/* We do want sk_pacing_rate to be respected: */
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
@@ -451,11 +463,11 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	base_rtt_us = base_rtt(sk, rs);
 
 	cwnd_old = get_cwnd(sk);
-	norm_power = ca->norm_power(sk, rs, base_rtt_us);
-	cwnd = ca->update_window(sk, cwnd_old, norm_power);
+	norm_power = ca->ops->norm_power(sk, rs, base_rtt_us);
+	cwnd = ca->ops->update_window(sk, cwnd_old, norm_power);
 	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
 	set_rate(sk, rate);
-	updated = ca->update_old(sk, rs, norm_power);
+	updated = ca->ops->update_old(sk, rs, norm_power);
 
 	if (updated) {
 		u16 inet_id = sk_inet_id(sk);
