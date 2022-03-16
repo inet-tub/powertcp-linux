@@ -395,7 +395,7 @@ void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
 		return;
 	}
 
-	if (ev == CA_EVENT_TX_START || ev == CA_EVENT_CWND_RESTART) {
+	if (ev == CA_EVENT_TX_START) {
 		ca->reset(sk, -1);
 	}
 }
