@@ -14,12 +14,11 @@ fi
 
 host=$1
 port=$2
-bs=$3
-count=1
+count=$3
 repeats=${4:-1}
 delay=${5:-0}
 
 for i in $(seq 1 "$repeats"); do
-	dd bs="$bs" count="$count" if=/dev/urandom
+	dd count="$count" if=/dev/urandom iflag=count_bytes
 	[ $i = "$repeats" ] || sleep "$delay"
 done | netcat -q0 "$host" "$port"
