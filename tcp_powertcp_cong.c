@@ -70,6 +70,8 @@ struct powertcp {
 	struct list_head old_cwnds;
 
 	long p_smooth;
+
+	unsigned long host_bw; /* Mbit/s */
 };
 
 static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
@@ -200,7 +202,6 @@ static void reset(struct sock *sk, long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned long host_bw = get_host_bw(sk);
 	u16 inet_id = sk_inet_id(sk);
 
 	if (base_rtt_us == -1L) {
@@ -208,11 +209,11 @@ static void reset(struct sock *sk, long base_rtt_us)
 	}
 
 	/* Set the rate first, the initialization of snd_cwnd already uses it. */
-	set_rate(sk, BITS_TO_BYTES(MEGA * host_bw));
+	set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
 	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
 
 	if (beta < 0) {
-		ca->beta = BITS_TO_BYTES((MEGA * host_bw * base_rtt_us) /
+		ca->beta = BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
 					 expected_flows / USEC_PER_SEC);
 		pr_debug("inet_id=%u: automatically setting beta to %d bytes\n",
 			 sk_inet_id(sk), ca->beta);
@@ -416,6 +417,7 @@ static void powertcp_init(struct sock *sk)
 		ca->update_window = rttptcp_update_window;
 	}
 
+	ca->host_bw = get_host_bw(sk);
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
 	/* Must be already (marked) initialized for reset() to work: */
