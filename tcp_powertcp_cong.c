@@ -329,8 +329,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 
 	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	delta_t = min(dt, base_rtt_us);
-	rtt_grad =
-		norm_power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
+	rtt_grad = max(norm_power_scale *
+			       (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt,
+		       0L);
 	p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
 	p_smooth = p_smooth ? p_smooth : p_norm;
 	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
