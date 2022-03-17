@@ -320,7 +320,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
-	long dt, rtt_grad, p_norm;
+	long dt, rtt_grad, p_norm, delta_t;
 	long p_smooth = ca->p_smooth;
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
@@ -328,12 +328,13 @@ static long rttptcp_norm_power(const struct sock *sk,
 	}
 
 	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
+	delta_t = min(dt, base_rtt_us);
 	rtt_grad =
 		norm_power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt;
 	p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
 	p_smooth = p_smooth ? p_smooth : p_norm;
-	p_smooth =
-		(p_smooth * (base_rtt_us - dt) + (p_norm * dt)) / base_rtt_us;
+	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
+		   base_rtt_us;
 
 	pr_debug(
 		"inet_id=%u: dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
