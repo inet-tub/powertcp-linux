@@ -226,7 +226,7 @@ static void reset(struct sock *sk, long base_rtt_us)
 		ca->beta = beta;
 	}
 
-	ca->p_smooth = 0;
+	ca->p_smooth = -1;
 
 	clear_old_cwnds(sk);
 
@@ -324,7 +324,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 	long p_smooth = ca->p_smooth;
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
-		return p_smooth ? p_smooth : norm_power_scale;
+		return p_smooth > -1 ? p_smooth : norm_power_scale;
 	}
 
 	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
@@ -333,7 +333,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 			       (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt,
 		       0L);
 	p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
-	p_smooth = p_smooth ? p_smooth : p_norm;
+	p_smooth = p_smooth > -1 ? p_smooth : p_norm;
 	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
 		   base_rtt_us;
 
