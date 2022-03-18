@@ -357,9 +357,11 @@ static long rttptcp_norm_power(const struct sock *sk,
 		   base_rtt_us;
 
 	pr_debug(
-		"inet_id=%u: dt=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
-		sk_inet_id(sk), dt, norm_power_scale, rtt_grad,
-		norm_power_scale, p_norm, norm_power_scale, p_smooth);
+		"inet_id=%u: dt=%ld us, delta_t=%ld us, rtt=%ld us, prev_rtt=%ld us, dRTT=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
+		sk_inet_id(sk), dt, delta_t, rs->rtt_us,
+		ca->rttptcp.prev_rtt_us, rs->rtt_us - ca->rttptcp.prev_rtt_us,
+		norm_power_scale, rtt_grad, norm_power_scale, p_norm,
+		norm_power_scale, p_smooth);
 
 	return p_smooth;
 }
