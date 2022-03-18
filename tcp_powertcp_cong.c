@@ -40,7 +40,7 @@ struct old_cwnd {
 struct powertcp_ops {
 	long (*norm_power)(const struct sock *sk, const struct rate_sample *rs,
 			   long base_rtt_us);
-	void (*reset)(struct sock *sk, long base_rtt_us);
+	void (*reset)(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us);
 	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
 			   long p_smooth);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
@@ -202,7 +202,7 @@ static void set_rate(struct sock *sk, unsigned long rate)
 	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
 }
 
-static void reset(struct sock *sk, long base_rtt_us)
+static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -212,30 +212,49 @@ static void reset(struct sock *sk, long base_rtt_us)
 		base_rtt_us = base_rtt(sk, NULL);
 	}
 
-	/* Set the rate first, the initialization of snd_cwnd already uses it. */
-	set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
-	set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
-	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
-
+	/* We are always adapting beta even on a CA_EVENT_TX_START (no packets in
+	 * flight).
+	 */
 	if (beta < 0) {
-		ca->beta = BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
-					 expected_flows / USEC_PER_SEC);
-		pr_debug("inet_id=%u: automatically setting beta to %d bytes\n",
-			 sk_inet_id(sk), ca->beta);
+		int new_beta =
+			BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
+				      expected_flows / USEC_PER_SEC);
+		/* We are actually looking whether the base RTT got smaller, but don't
+		 * want to remember that in a separate variable in struct powertcp.
+		 * Space is precious in there. All values besides the base RTT do not
+		 * change at runtime in the above calculation.
+		 */
+		if (new_beta < ca->beta) {
+			ca->beta = new_beta;
+			pr_debug(
+				"inet_id=%u: automatically setting beta to %d bytes\n",
+				sk_inet_id(sk), ca->beta);
+		}
 	} else {
 		ca->beta = beta;
 	}
 
-	ca->p_smooth = -1;
+	/* Only reset all other values for the calculations on a
+	 * CA_EVENT_CWND_RESTART (used on initialization). Otherwise we would reset
+	 * cwnd and rate too frequently if there are frequent CA_EVENT_TX_STARTs.
+	 */
+	if (ev == CA_EVENT_CWND_RESTART) {
+		/* Set the rate first, the initialization of snd_cwnd already uses it. */
+		set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
+		set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
+		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
-	clear_old_cwnds(sk);
+		ca->p_smooth = -1;
 
-	pr_debug(
-		"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-		inet_id, tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
-		sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
-	powertcp_debugfs_update(inet_id, tp->snd_una, tp->snd_cwnd,
-				sk->sk_pacing_rate);
+		clear_old_cwnds(sk);
+
+		pr_debug(
+			"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
+			inet_id, tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
+			sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
+		powertcp_debugfs_update(inet_id, tp->snd_una, tp->snd_cwnd,
+					sk->sk_pacing_rate);
+	}
 }
 
 /* Update the list of recent snd_cwnds. */
@@ -345,7 +364,8 @@ static long rttptcp_norm_power(const struct sock *sk,
 	return p_smooth;
 }
 
-static void rttptcp_reset(struct sock *sk, long base_rtt_us)
+static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
+			  long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -354,11 +374,17 @@ static void rttptcp_reset(struct sock *sk, long base_rtt_us)
 		base_rtt_us = base_rtt(sk, NULL);
 	}
 
-	ca->rttptcp.last_updated = tp->snd_nxt;
-	ca->rttptcp.prev_rtt_us = base_rtt_us;
+	/* Only reset those on initialization. */
+	if (ev == CA_EVENT_CWND_RESTART) {
+		// TODO: Evaluate if it actually improves performance of the algorithm
+		// to reset those two values only on CA_EVENT_CWND_RESTART:
+		ca->rttptcp.last_updated = tp->snd_nxt;
+		ca->rttptcp.prev_rtt_us = base_rtt_us;
+	}
+
 	ca->rttptcp.t_prev = tp->tcp_mstamp;
 
-	reset(sk, base_rtt_us);
+	reset(sk, ev, base_rtt_us);
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
@@ -416,7 +442,7 @@ void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
 	}
 
 	if (ev == CA_EVENT_TX_START) {
-		ca->ops->reset(sk, -1);
+		ca->ops->reset(sk, ev, -1);
 	}
 }
 
@@ -432,12 +458,13 @@ static void powertcp_init(struct sock *sk)
 		ca->ops = &rttptcp_ops;
 	}
 
+	ca->beta = INT_MAX;
 	ca->host_bw = get_host_bw(sk);
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
 	/* Must be already (marked) initialized for reset() to work: */
 	ca->initialized = true;
-	ca->ops->reset(sk, -1);
+	ca->ops->reset(sk, CA_EVENT_CWND_RESTART, -1);
 
 	/* We do want sk_pacing_rate to be respected: */
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
