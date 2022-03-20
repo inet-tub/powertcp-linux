@@ -26,6 +26,9 @@
 #include <linux/units.h>
 #include <net/tcp.h>
 
+#define CREATE_TRACE_POINTS
+#include "tcp_powertcp_trace.h"
+
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
 	POWERTCP_RTTPOWERTCP = 1,
@@ -318,6 +321,9 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 		(gamma * (norm_power_scale * cwnd_old / norm_power + ca->beta) +
 		 (gamma_scale - gamma) * tp->snd_cwnd) /
 		gamma_scale;
+	trace_update_window(tp->tcp_mstamp, sk_inet_id(sk), cwnd_old,
+			    tp->snd_cwnd, norm_power_scale, norm_power,
+			    ca->beta, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -362,6 +368,9 @@ static long rttptcp_norm_power(const struct sock *sk,
 		ca->rttptcp.prev_rtt_us, rs->rtt_us - ca->rttptcp.prev_rtt_us,
 		norm_power_scale, rtt_grad, norm_power_scale, p_norm,
 		norm_power_scale, p_smooth);
+	trace_norm_power(tp->tcp_mstamp, sk_inet_id(sk), dt, delta_t, rtt_grad,
+			 base_rtt_us, norm_power_scale, p_norm, ca->p_smooth,
+			 p_smooth);
 
 	return p_smooth;
 }
@@ -507,6 +516,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 			inet_id, cwnd_old, base_rtt_us, norm_power_scale,
 			norm_power, cwnd, rate, rate * BITS_PER_BYTE / MEGA);
 		powertcp_debugfs_update(inet_id, tp->snd_una, cwnd, rate);
+		trace_new_ack(tp->tcp_mstamp, inet_id, tp->snd_una, cwnd, rate);
 	}
 }
 

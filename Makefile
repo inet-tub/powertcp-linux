@@ -1,5 +1,9 @@
 ifneq ($(KERNELRELEASE),)
 
+# Without explicitly specifying the source folder as an include dir,
+# define_trace.h fails to find our trace header.
+ccflags-y := -I$(src)
+
 obj-m := tcp_powertcp.o
 
 tcp_powertcp-y := tcp_powertcp_cong.o
