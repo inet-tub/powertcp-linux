@@ -61,11 +61,11 @@ TRACE_EVENT(norm_power,
 		__entry->result = result;
 	),
 	TP_printk(
-		"time=%llu ns inet_id=%u: dt=%ld us delta_t=%ld us rtt_grad=%ld base_rtt=%ld us p_norm*%ld=%ld p_smooth*%ld=%ld => p_smooth*%ld=%ld",
+		"time=%llu ns inet_id=%u: dt=%ld us delta_t=%ld us rtt_grad*%ld=%ld base_rtt=%ld us p_norm*%ld=%ld p_smooth*%ld=%ld => p_smooth*%ld=%ld",
 		__entry->time, __entry->inet_id, __entry->dt, __entry->delta_t,
-		__entry->rtt_grad, __entry->base_rtt,  __entry->power_scale,
-		__entry->p_norm, __entry->power_scale, __entry->p_smooth,
-		__entry->power_scale, __entry->result)
+		__entry->power_scale, __entry->rtt_grad, __entry->base_rtt,
+		__entry->power_scale, __entry->p_norm, __entry->power_scale,
+		__entry->p_smooth, __entry->power_scale, __entry->result)
 )
 
 TRACE_EVENT(update_window,
