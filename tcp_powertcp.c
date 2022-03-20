@@ -81,7 +81,7 @@ struct powertcp {
 
 static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const long gamma_scale = (1L << 10);
-static const long norm_power_scale = (1L << 16);
+static const long power_scale = (1L << 16);
 
 static int beta = -1;
 static int expected_flows = 10;
@@ -303,13 +303,12 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	const struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	u32 cwnd =
-		(gamma * (norm_power_scale * cwnd_old / norm_power + ca->beta) +
-		 (gamma_scale - gamma) * tp->snd_cwnd) /
-		gamma_scale;
+	u32 cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
+		    (gamma_scale - gamma) * tp->snd_cwnd) /
+		   gamma_scale;
 	trace_update_window(tp->tcp_mstamp, sk_inet_id(sk), cwnd_old,
-			    tp->snd_cwnd, norm_power_scale, norm_power,
-			    ca->beta, cwnd);
+			    tp->snd_cwnd, power_scale, norm_power, ca->beta,
+			    cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -335,21 +334,20 @@ static long rttptcp_norm_power(const struct sock *sk,
 	long p_smooth = ca->p_smooth;
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
-		return p_smooth > -1 ? p_smooth : norm_power_scale;
+		return p_smooth > -1 ? p_smooth : power_scale;
 	}
 
 	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	delta_t = min(dt, base_rtt_us);
-	rtt_grad = max(norm_power_scale *
-			       (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt,
-		       0L);
-	p_norm = (rtt_grad + norm_power_scale) * rs->rtt_us / base_rtt_us;
+	rtt_grad = max(
+		power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt, 0L);
+	p_norm = (rtt_grad + power_scale) * rs->rtt_us / base_rtt_us;
 	p_smooth = p_smooth > -1 ? p_smooth : p_norm;
 	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
 		   base_rtt_us;
 
 	trace_norm_power(tp->tcp_mstamp, sk_inet_id(sk), dt, delta_t, rtt_grad,
-			 base_rtt_us, norm_power_scale, p_norm, ca->p_smooth,
+			 base_rtt_us, power_scale, p_norm, ca->p_smooth,
 			 p_smooth);
 
 	return p_smooth;
