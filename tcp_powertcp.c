@@ -207,7 +207,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	u16 inet_id = sk_inet_id(sk);
 
 	if (base_rtt_us == -1L) {
 		base_rtt_us = base_rtt(sk, NULL);
@@ -217,20 +216,16 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 	 * flight).
 	 */
 	if (beta < 0) {
-		int new_beta =
-			BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
-				      expected_flows / USEC_PER_SEC);
 		/* We are actually looking whether the base RTT got smaller, but don't
 		 * want to remember that in a separate variable in struct powertcp.
 		 * Space is precious in there. All values besides the base RTT do not
-		 * change at runtime in the above calculation.
+		 * change at runtime in the calculation of beta.
 		 */
-		if (new_beta < ca->beta) {
-			ca->beta = new_beta;
-			pr_debug(
-				"inet_id=%u: automatically setting beta to %d bytes\n",
-				sk_inet_id(sk), ca->beta);
-		}
+		ca->beta =
+			min_t(int,
+			      BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
+					    expected_flows / USEC_PER_SEC),
+			      ca->beta);
 	} else {
 		ca->beta = beta;
 	}
@@ -248,11 +243,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 		ca->p_smooth = -1;
 
 		clear_old_cwnds(sk);
-
-		pr_debug(
-			"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-			inet_id, tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
-			sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
 	}
 }
 
@@ -358,12 +348,6 @@ static long rttptcp_norm_power(const struct sock *sk,
 	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
 		   base_rtt_us;
 
-	pr_debug(
-		"inet_id=%u: dt=%ld us, delta_t=%ld us, rtt=%ld us, prev_rtt=%ld us, dRTT=%ld us, rtt_grad*%ld=%ld, p_norm*%ld=%ld, p_smooth*%ld=%ld\n",
-		sk_inet_id(sk), dt, delta_t, rs->rtt_us,
-		ca->rttptcp.prev_rtt_us, rs->rtt_us - ca->rttptcp.prev_rtt_us,
-		norm_power_scale, rtt_grad, norm_power_scale, p_norm,
-		norm_power_scale, p_smooth);
 	trace_norm_power(tp->tcp_mstamp, sk_inet_id(sk), dt, delta_t, rtt_grad,
 			 base_rtt_us, norm_power_scale, p_norm, ca->p_smooth,
 			 p_smooth);
@@ -506,12 +490,8 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	updated = ca->ops->update_old(sk, rs, norm_power);
 
 	if (updated) {
-		u16 inet_id = sk_inet_id(sk);
-		pr_debug(
-			"inet_id=%u: cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
-			inet_id, cwnd_old, base_rtt_us, norm_power_scale,
-			norm_power, cwnd, rate, rate * BITS_PER_BYTE / MEGA);
-		trace_new_ack(tp->tcp_mstamp, inet_id, tp->snd_una, cwnd, rate);
+		trace_new_ack(tp->tcp_mstamp, sk_inet_id(sk), tp->snd_una, cwnd,
+			      rate);
 	}
 }
 
