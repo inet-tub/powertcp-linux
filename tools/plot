@@ -9,25 +9,40 @@ import matplotlib.ticker as ticker
 import numpy as np
 
 
-COLUMNS = ("inet_id", "ack_seq", "cwnd", "rate")
+COLUMNS = (
+    "ack_seq",
+    "cwnd",
+    "inet_id",
+    "rate",
+    "time",
+)
 
 LABELS = {
     "ack_seq": "ACK'ed sequence #",
     "cwnd": "Congestion window",
     "rate": "Transmission rate",
+    "time": "Time",
 }
 
 LIMITS = {
     "rate": (0, 100 * 10 ** 9),
 }
 
-UNIT_FACTORS = {
-    "bit/s": 8,
+PRETTY_UNITS = {
+    "us": "µs",
 }
 
+UNIT_FACTORS = {
+    "bit/s": 8,
+    "s": 0.000001,
+    "us": 0.001,
+}
+
+# The first unit specified for a column, if any, is the default unit:
 UNITS = {
     "cwnd": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
+    "time": ("us", "ns", "s"),
 }
 
 
@@ -55,6 +70,7 @@ def set_lim(values, lim_min, lim_max, lim_func):
 
 
 def setup_axis(axis, col, unit):
+    unit = PRETTY_UNITS.get(unit, unit)
     axis.set_minor_locator(ticker.AutoMinorLocator())
     if col == "ack_seq":
         axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
@@ -62,6 +78,13 @@ def setup_axis(axis, col, unit):
         axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
     elif col == "rate":
         axis.set_major_formatter(ticker.EngFormatter(unit=unit))
+    elif col == "time":
+        precision = 0
+        if unit == "s":
+            precision = 3
+        axis.set_major_formatter(
+            ticker.StrMethodFormatter(f"{{x:.{precision}f}} {unit}")
+        )
 
 
 def main():
@@ -91,8 +114,10 @@ def main():
 
     args = argparser.parse_args(remaining_argv, early_args)
 
+    df = pd.read_csv(args.csv_file)
+    df["time"] -= df["time"].min()
+
     if args.info:
-        df = pd.read_csv(args.csv_file)
         pd.options.display.float_format = "{:.0f}".format
         df.info()
         print(f"\n{df.describe(percentiles=[])}")
@@ -111,7 +136,6 @@ def main():
     except LookupError as e:
         return e
 
-    df = pd.read_csv(args.csv_file, usecols=(args.x, args.y))
     df[args.x] *= UNIT_FACTORS.get(args.xunit, 1)
     df[args.y] *= UNIT_FACTORS.get(args.yunit, 1)
     df = df.set_index(args.x).loc[args.xmin : args.xmax]
