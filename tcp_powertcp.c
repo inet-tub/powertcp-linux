@@ -15,8 +15,6 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include "tcp_powertcp_debugfs.h"
-
 #include <linux/ethtool.h>
 #include <linux/init.h>
 #include <linux/list.h>
@@ -255,8 +253,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 			"inet_id=%u: reset: cwnd=%u bytes, base_rtt=%lu us, rate=%lu bytes/s (~= %lu Mbit/s)\n",
 			inet_id, tp->snd_cwnd, base_rtt_us, sk->sk_pacing_rate,
 			sk->sk_pacing_rate * BITS_PER_BYTE / MEGA);
-		powertcp_debugfs_update(inet_id, tp->snd_una, tp->snd_cwnd,
-					sk->sk_pacing_rate);
 	}
 }
 
@@ -515,7 +511,6 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 			"inet_id=%u: cwnd_old=%u bytes, base_rtt=%ld us, norm_power*%ld=%ld, cwnd=%u bytes, rate=%lu bytes/s (~= %lu Mbit/s)\n",
 			inet_id, cwnd_old, base_rtt_us, norm_power_scale,
 			norm_power, cwnd, rate, rate * BITS_PER_BYTE / MEGA);
-		powertcp_debugfs_update(inet_id, tp->snd_una, cwnd, rate);
 		trace_new_ack(tp->tcp_mstamp, inet_id, tp->snd_una, cwnd, rate);
 	}
 }
@@ -566,13 +561,11 @@ static int __init powertcp_register(void)
 		return ret;
 	}
 
-	powertcp_debugfs_init();
 	return 0;
 }
 
 static void __exit powertcp_unregister(void)
 {
-	powertcp_debugfs_exit();
 	tcp_unregister_congestion_control(&powertcp);
 }
 

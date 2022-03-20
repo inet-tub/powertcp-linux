@@ -6,9 +6,6 @@ ccflags-y := -I$(src)
 
 obj-m := tcp_powertcp.o
 
-tcp_powertcp-y := tcp_powertcp_cong.o
-tcp_powertcp-$(CONFIG_DEBUG_FS) += tcp_powertcp_debugfs.o
-
 else
 
 KDIR ?= /lib/modules/$(shell uname -r)/build
