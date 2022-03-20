@@ -1,0 +1,12 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+	print("time,inet_id,ack_seq,cwnd,rate");
+}
+
+tracepoint:powertcp:new_ack
+{
+	printf("%llu,%u,%u,%u,%lu\n", args->time, args->inet_id, args->ack_seq,
+		args->cwnd, args->rate);
+}
