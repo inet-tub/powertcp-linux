@@ -51,7 +51,7 @@ def check_unit(col, unit):
     if unit is None:
         unit = units[0]
     if unit not in (None, *units):
-        raise LookupError(f"unit {unit} not available for {col}")
+        raise LookupError(f"unit “{unit}“ not available for “{col}“")
     return unit
 
 
@@ -124,7 +124,7 @@ def main():
         return
 
     if args.x == args.y:
-        return "arguments x and y cannot be the same"
+        return f"cannot use the same column “{args.x}” for x and y axis"
 
     try:
         args.xunit = check_unit(args.x, args.xunit)
