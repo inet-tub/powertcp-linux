@@ -12,7 +12,7 @@ import numpy as np
 COLUMNS = (
     "ack_seq",
     "cwnd",
-    "inet_id",
+    "hash",
     "rate",
     "time",
 )

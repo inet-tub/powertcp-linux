@@ -2,11 +2,11 @@
 
 BEGIN
 {
-	print("time,inet_id,ack_seq,cwnd,rate");
+	print("time,hash,ack_seq,cwnd,rate");
 }
 
 tracepoint:powertcp:new_ack
 {
-	printf("%llu,%u,%u,%u,%lu\n", args->time, args->inet_id, args->ack_seq,
+	printf("%llu,%u,%u,%u,%lu\n", args->time, args->hash, args->ack_seq,
 		args->cwnd, args->rate);
 }

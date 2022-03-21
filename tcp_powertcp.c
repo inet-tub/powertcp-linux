@@ -123,11 +123,6 @@ static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
 	return USEC_PER_SEC;
 }
 
-static u16 sk_inet_id(const struct sock *sk)
-{
-	return inet_sk(sk)->inet_id;
-}
-
 static void clear_old_cwnds(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -181,8 +176,8 @@ static unsigned long get_host_bw(struct sock *sk)
 		rtnl_unlock();
 		if (r == 0 && cmd.base.speed != SPEED_UNKNOWN) {
 			bw = cmd.base.speed;
-			pr_debug("inet_id=%u: got link speed: %lu Mbit/s\n",
-				 sk_inet_id(sk), bw);
+			pr_debug("hash=%u: got link speed: %lu Mbit/s\n",
+				 sk->sk_hash, bw);
 		} else {
 			pr_warn("link speed unavailable, using fallback: %lu Mbit/s\n",
 				bw);
@@ -306,9 +301,8 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	u32 cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
 		    (gamma_scale - gamma) * tp->snd_cwnd) /
 		   gamma_scale;
-	trace_update_window(tp->tcp_mstamp, sk_inet_id(sk), cwnd_old,
-			    tp->snd_cwnd, power_scale, norm_power, ca->beta,
-			    cwnd);
+	trace_update_window(tp->tcp_mstamp, sk->sk_hash, cwnd_old, tp->snd_cwnd,
+			    power_scale, norm_power, ca->beta, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -346,7 +340,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
 		   base_rtt_us;
 
-	trace_norm_power(tp->tcp_mstamp, sk_inet_id(sk), dt, delta_t, rtt_grad,
+	trace_norm_power(tp->tcp_mstamp, sk->sk_hash, dt, delta_t, rtt_grad,
 			 base_rtt_us, power_scale, p_norm, ca->p_smooth,
 			 p_smooth);
 
@@ -488,7 +482,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	updated = ca->ops->update_old(sk, rs, norm_power);
 
 	if (updated) {
-		trace_new_ack(tp->tcp_mstamp, sk_inet_id(sk), tp->snd_una, cwnd,
+		trace_new_ack(tp->tcp_mstamp, sk->sk_hash, tp->snd_una, cwnd,
 			      rate);
 	}
 }
