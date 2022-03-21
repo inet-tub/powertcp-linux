@@ -114,7 +114,7 @@ def main():
 
     args = argparser.parse_args(remaining_argv, early_args)
 
-    df = pd.read_csv(args.csv_file)
+    df = pd.read_csv(args.csv_file).dropna()
     df["time"] -= df["time"].min()
 
     if args.info:
