@@ -25,7 +25,7 @@ TRACE_EVENT(new_ack,
 		__entry->cwnd = cwnd;
 		__entry->rate = rate;
 	),
-	TP_printk("time=%llu ns inet_id=%u ack_seq=%u: cwnd=%u rate=%lu bytes/s (~%lu Mbit/s)",
+	TP_printk("time=%llu us inet_id=%u ack_seq=%u: cwnd=%u rate=%lu bytes/s (~%lu Mbit/s)",
 		__entry->time, __entry->inet_id, __entry->ack_seq, __entry->cwnd,
 		__entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
 );
@@ -61,7 +61,7 @@ TRACE_EVENT(norm_power,
 		__entry->result = result;
 	),
 	TP_printk(
-		"time=%llu ns inet_id=%u: dt=%ld us delta_t=%ld us rtt_grad*%ld=%ld base_rtt=%ld us p_norm*%ld=%ld p_smooth*%ld=%ld => p_smooth*%ld=%ld",
+		"time=%llu us inet_id=%u: dt=%ld us delta_t=%ld us rtt_grad*%ld=%ld base_rtt=%ld us p_norm*%ld=%ld p_smooth*%ld=%ld => p_smooth*%ld=%ld",
 		__entry->time, __entry->inet_id, __entry->dt, __entry->delta_t,
 		__entry->power_scale, __entry->rtt_grad, __entry->base_rtt,
 		__entry->power_scale, __entry->p_norm, __entry->power_scale,
@@ -93,7 +93,7 @@ TRACE_EVENT(update_window,
 		__entry->result = result;
 	),
 	TP_printk(
-		"time=%llu ns inet_id=%u: cwnd_old=%u cwnd=%u p_norm*%ld=%ld  beta=%ld => cwnd=%u",
+		"time=%llu us inet_id=%u: cwnd_old=%u cwnd=%u p_norm*%ld=%ld  beta=%ld => cwnd=%u",
 		__entry->time, __entry->inet_id, __entry->cwnd_old, __entry->cwnd,
 		__entry->power_scale, __entry->p_norm, __entry->beta, __entry->result)
 );

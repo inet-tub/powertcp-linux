@@ -34,15 +34,15 @@ PRETTY_UNITS = {
 
 UNIT_FACTORS = {
     "bit/s": 8,
+    "ms": 0.001,
     "s": 0.000001,
-    "us": 0.001,
 }
 
 # The first unit specified for a column, if any, is the default unit:
 UNITS = {
     "cwnd": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
-    "time": ("us", "ns", "s"),
+    "time": ("us", "ms", "s"),
 }
 
 
