@@ -138,7 +138,7 @@ def main():
 
     df[args.x] *= UNIT_FACTORS.get(args.xunit, 1)
     df[args.y] *= UNIT_FACTORS.get(args.yunit, 1)
-    df = df.set_index(args.x).loc[args.xmin : args.xmax]
+    df = df.set_index(args.x).sort_index().loc[args.xmin : args.xmax]
 
     fig, ax = plt.subplots()
     ax.plot(df.index, df[args.y], args.fmt)
