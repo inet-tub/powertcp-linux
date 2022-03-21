@@ -241,6 +241,18 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 	}
 }
 
+static long smooth_power(long p_smooth, long p_norm, long base_rtt_us,
+			 long delta_t)
+{
+	/* powertcp.p_smooth is initialized with -1, we don't want to smooth for the
+	 * very first calculation.
+	 */
+	return p_smooth < 0 ? p_norm :
+				    (p_smooth * (base_rtt_us - delta_t) +
+			       (p_norm * delta_t)) /
+				      base_rtt_us;
+}
+
 /* Update the list of recent snd_cwnds. */
 static bool update_old(struct sock *sk, long p_smooth)
 {
@@ -336,9 +348,7 @@ static long rttptcp_norm_power(const struct sock *sk,
 	rtt_grad = max(
 		power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt, 0L);
 	p_norm = (rtt_grad + power_scale) * rs->rtt_us / base_rtt_us;
-	p_smooth = p_smooth > -1 ? p_smooth : p_norm;
-	p_smooth = (p_smooth * (base_rtt_us - delta_t) + (p_norm * delta_t)) /
-		   base_rtt_us;
+	p_smooth = smooth_power(p_smooth, p_norm, base_rtt_us, delta_t);
 
 	trace_norm_power(tp->tcp_mstamp, sk->sk_hash, dt, delta_t, rtt_grad,
 			 base_rtt_us, power_scale, p_norm, ca->p_smooth,
