@@ -52,6 +52,14 @@ struct powertcp_ops {
 				       unsigned long norm_power);
 };
 
+// TODO: Think about appropriate types for the members.
+struct powertcp_int {
+	u32 ts;
+	u32 qlen;
+	u32 tx_bytes;
+	u32 bandwidth;
+};
+
 static int base_rtt __read_mostly = -1;
 static int beta __read_mostly = -1;
 static int expected_flows __read_mostly = 10;
@@ -327,7 +335,50 @@ static unsigned long ptcp_norm_power(const struct sock *sk,
 				     const struct rate_sample *rs,
 				     unsigned long base_rtt_us)
 {
-	return 0;
+	unsigned long delta_t = 0;
+	unsigned long p_norm = 0;
+	unsigned long p_smooth;
+
+	/* for each egress port i on the path */
+	for (;;) {
+		// TODO: Think about a way to manage the INT data.
+		const struct powertcp_int *hop_int = NULL;
+		const struct powertcp_int *prev_hop_int = NULL;
+		unsigned long dt =
+			hop_int->ts -
+			prev_hop_int->ts; /* ack.H[i].ts - prevInt[i].ts */
+		unsigned long queue_grad =
+			power_scale * (hop_int->qlen - prev_hop_int->qlen) /
+			dt; /* ack.H[i].qlen - prevInt[i].qlen */
+		unsigned long rate =
+			power_scale *
+			(hop_int->tx_bytes - prev_hop_int->tx_bytes) /
+			dt; /* ack.H[i].txBytes - prevInt[i].txBytes */
+		/* The variable name "current" instead of lambda would conflict with a
+		 * macro of the same name in asm-generic/current.h.
+		 */
+		unsigned long lambda = queue_grad + rate;
+		unsigned long bdp =
+			hop_int->bandwidth * base_rtt_us; /* ack.H[i].b */
+		unsigned long voltage =
+			USEC_PER_SEC * hop_int->qlen + bdp; /* ack.H[i].qlen */
+		unsigned long hop_p = lambda * voltage;
+		unsigned long equilibrium = hop_int->bandwidth *
+					    hop_int->bandwidth *
+					    base_rtt_us; /* ack.H[i].b */
+		unsigned long hop_p_norm = hop_p / equilibrium;
+		if (hop_p_norm > p_norm) {
+			p_norm = hop_p_norm;
+			delta_t = dt;
+		}
+	}
+
+	delta_t = min(delta_t, base_rtt_us);
+	p_smooth = ewma(delta_t, base_rtt_us, p_norm, p_smooth);
+
+	trace_norm_power(sk, 0, delta_t, 0, 0, base_rtt_us, p_norm, p_smooth);
+
+	return p_smooth;
 }
 
 static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
