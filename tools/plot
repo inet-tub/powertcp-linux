@@ -75,21 +75,21 @@ def set_lim(values, lim_min, lim_max, lim_func):
 
 
 def setup_axis(axis, col, unit):
-    unit = PRETTY_UNITS.get(unit, unit)
+    pretty_unit = PRETTY_UNITS.get(unit, unit)
     axis.set_minor_locator(ticker.AutoMinorLocator())
-    if col == "ack_seq":
+
+    if col in ("ack_seq", "cwnd"):
         axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
-    elif col == "cwnd":
-        axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
-    elif col == "rate":
-        axis.set_major_formatter(ticker.EngFormatter(unit=unit))
-    elif col == "time":
-        precision = 0
-        if unit == "s":
-            precision = 3
-        axis.set_major_formatter(
-            ticker.StrMethodFormatter(f"{{x:.{precision}f}} {unit}")
-        )
+    else:
+        if unit in ("bit/s", "bytes/s"):
+            axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit))
+        elif unit in ("s", "ms", "us"):
+            precision = 0
+            if unit == "s":
+                precision = 3
+            axis.set_major_formatter(
+                ticker.StrMethodFormatter(f"{{x:.{precision}f}} {pretty_unit}")
+            )
 
 
 def main():
