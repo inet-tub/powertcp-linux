@@ -56,6 +56,23 @@ UNITS = {
 }
 
 
+class ListStrToDict:
+    def __init__(self, value_type):
+        self._value_type = value_type
+
+    def __call__(self, list_str):
+        d = {}
+        for s in list_str.split(","):
+            k, v = s.split(":")
+            if v is not None:
+                v = self._value_type(v)
+            d[k] = v
+        return d
+
+    def __repr__(self):
+        return self._value_type.__name__
+
+
 def check_unit(col, unit):
     units = UNITS.get(col, (None,))
     if unit is None:
@@ -63,14 +80,6 @@ def check_unit(col, unit):
     if unit not in (None, *units):
         raise LookupError(f"unit “{unit}“ not available for “{col}“")
     return unit
-
-
-def list_str_to_dict(list_str):
-    d = {}
-    for s in list_str.split(","):
-        k, v = s.split(":")
-        d[k] = v
-    return d
 
 
 def set_lim(values, lim_min, lim_max, lim_func):
@@ -120,10 +129,10 @@ def main():
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
 
     if not early_args.info:
-        argparser.add_argument("--fmt", default={}, type=list_str_to_dict)
-        argparser.add_argument("--max", default={}, type=list_str_to_dict)
-        argparser.add_argument("--min", default={}, type=list_str_to_dict)
-        argparser.add_argument("--unit", default={}, type=list_str_to_dict)
+        argparser.add_argument("--fmt", default={}, type=ListStrToDict(str))
+        argparser.add_argument("--max", default={}, type=ListStrToDict(float))
+        argparser.add_argument("--min", default={}, type=ListStrToDict(float))
+        argparser.add_argument("--unit", default={}, type=ListStrToDict(str))
         argparser.add_argument("x", choices=COLUMNS)
         argparser.add_argument("y", choices=COLUMNS, nargs="+")
 
