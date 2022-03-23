@@ -82,18 +82,18 @@ def check_unit(col, unit):
     return unit
 
 
-def set_lim(values, lim_min, lim_max, lim_func):
-    min_val = values.min()
-    max_val = values.max()
+def set_ylim(axis, min_val, max_val, min_lim, max_lim):
     try:
-        lim_min = max(lim_min, min_val)
+        min_val = max(min_val, min_lim)
     except TypeError:
-        lim_min = min_val
+        pass
     try:
-        lim_max = min(lim_max, max_val)
+        max_val = min(max_val, max_lim)
     except TypeError:
-        lim_max = max_val
-    return lim_func(lim_min, lim_max)
+        pass
+    _, ymargin = axis.margins()
+    the_margin = ymargin * (max_val - min_val)
+    axis.set_ylim(min_val - the_margin, max_val + the_margin)
 
 
 def setup_axis(axis, col, unit):
@@ -157,11 +157,10 @@ def main():
         return e
 
     df[args.x] *= UNIT_FACTORS.get(xunit, 1)
-    df = (
-        df.set_index(args.x)
-        .sort_index()
-        .loc[args.min.get(args.x) : args.max.get(args.x)]
-    )
+    xmin = args.min.get(args.x, df[args.x].min())
+    xmax = args.max.get(args.x, df[args.x].max())
+    df = df[(df[args.x] >= xmin) & (df[args.x] <= xmax)]
+    df = df.set_index(args.x).sort_index()
 
     fig, ax = plt.subplots()
     ax.set_xlabel(LABELS.get(args.x, args.x))
@@ -193,8 +192,8 @@ def main():
             axx.plot(df.index, df[y], yfmt, color=ycolor, label=LABELS.get(y, y))
         )
         axx.set_ylabel(LABELS.get(y, y))
+        set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
         setup_axis(axx.yaxis, y, yunit)
-        set_lim(df[y], ymin, ymax, axx.set_ylim)
 
     if len(lines) > 1:
         ax.legend(handles=lines)
