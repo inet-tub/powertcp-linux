@@ -160,7 +160,6 @@ def main():
     xmin = args.min.get(args.x, df[args.x].min())
     xmax = args.max.get(args.x, df[args.x].max())
     df = df[(df[args.x] >= xmin) & (df[args.x] <= xmax)]
-    df = df.set_index(args.x).sort_index()
 
     fig, ax = plt.subplots()
     ax.set_xlabel(LABELS.get(args.x, args.x))
@@ -189,7 +188,7 @@ def main():
             axx = ax
 
         lines.extend(
-            axx.plot(df.index, df[y], yfmt, color=ycolor, label=LABELS.get(y, y))
+            axx.plot(args.x, y, yfmt, color=ycolor, data=df, label=LABELS.get(y, y))
         )
         axx.set_ylabel(LABELS.get(y, y))
         set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
