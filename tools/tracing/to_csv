@@ -2,11 +2,21 @@
 
 BEGIN
 {
-	print("time,hash,ack_seq,cwnd,rate");
+	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate");
 }
 
 tracepoint:powertcp:new_ack
 {
-	printf("%llu,%u,%u,%u,%lu\n", args->time, args->hash, args->ack_seq,
-		args->cwnd, args->rate);
+	printf("%llu,%u,%u,%ld,%d,%u,%lu\n", args->time, args->hash, args->ack_seq,
+		@base_rtt[tid], @beta[tid], args->cwnd, args->rate);
+}
+
+tracepoint:powertcp:norm_power
+{
+	@base_rtt[tid] = args->base_rtt;
+}
+
+tracepoint:powertcp:update_window
+{
+	@beta[tid] = args->beta;
 }
