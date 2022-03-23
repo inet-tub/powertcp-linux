@@ -16,6 +16,8 @@ COLORS = [f"C{i}" for i in range(11)]
 
 COLUMNS = (
     "ack_seq",
+    "base_rtt",
+    "beta",
     "cwnd",
     "hash",
     "rate",
@@ -24,6 +26,8 @@ COLUMNS = (
 
 LABELS = {
     "ack_seq": "ACK'ed sequence #",
+    "base_rtt": "Base RTT",
+    "beta": "Additive increase β",
     "cwnd": "Congestion window",
     "rate": "Transmission rate",
     "time": "Time",
@@ -45,6 +49,8 @@ UNIT_FACTORS = {
 
 # The first unit specified for a column, if any, is the default unit:
 UNITS = {
+    "base_rtt": ("us", "ms", "s"),
+    "beta": ("bytes",),
     "cwnd": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
     "time": ("us", "ms", "s"),
