@@ -83,6 +83,7 @@ static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const long gamma_scale = (1L << 10);
 static const long power_scale = (1L << 16);
 
+static int base_rtt __read_mostly = -1;
 static int beta __read_mostly = -1;
 static int expected_flows __read_mostly = 10;
 static int gamma __read_mostly = 0.9 * gamma_scale;
@@ -91,6 +92,10 @@ static int gamma __read_mostly = 0.9 * gamma_scale;
 // INT.
 static int variant __read_mostly = POWERTCP_POWERTCP;
 
+module_param(base_rtt, int, 0444);
+MODULE_PARM_DESC(
+	base_rtt,
+	"base (minimum) round-trip time (RTT) in us (default: -1; -1: automatically detect)");
 module_param(beta, int, 0444);
 MODULE_PARM_DESC(beta,
 		 "additive increase (default: -1; -1: automatically set beta)");
@@ -106,11 +111,16 @@ MODULE_PARM_DESC(
 	"algorithm variant to use (default: 0; 0: PowerTCP (requires INT), 1: RTT-PowerTCP (standalone))");
 
 /* Look for the base (~= minimum) RTT (in us). */
-static long base_rtt(const struct sock *sk, const struct rate_sample *rs)
+static long get_base_rtt(const struct sock *sk, const struct rate_sample *rs)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
+	u32 min_rtt;
 
-	u32 min_rtt = tcp_min_rtt(tp);
+	if (base_rtt > -1) {
+		return base_rtt;
+	}
+
+	min_rtt = tcp_min_rtt(tp);
 	if (likely(min_rtt != ~0U)) {
 		return min_rtt;
 	}
@@ -204,7 +214,7 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 	struct tcp_sock *tp = tcp_sk(sk);
 
 	if (base_rtt_us == -1L) {
-		base_rtt_us = base_rtt(sk, NULL);
+		base_rtt_us = get_base_rtt(sk, NULL);
 	}
 
 	/* We are always adapting beta even on a CA_EVENT_TX_START (no packets in
@@ -364,7 +374,7 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (base_rtt_us == -1L) {
-		base_rtt_us = base_rtt(sk, NULL);
+		base_rtt_us = get_base_rtt(sk, NULL);
 	}
 
 	/* Only reset those on initialization. */
@@ -482,7 +492,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 		return;
 	}
 
-	base_rtt_us = base_rtt(sk, rs);
+	base_rtt_us = get_base_rtt(sk, rs);
 
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->ops->norm_power(sk, rs, base_rtt_us);
