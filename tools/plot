@@ -186,7 +186,6 @@ def main():
         axx.set_ylabel(LABELS.get(y, y))
         setup_axis(axx.yaxis, y, yunit)
         set_lim(df[y], ymin, ymax, axx.set_ylim)
-        axx.tick_params(axis="y")
 
     if len(lines) > 1:
         ax.legend(handles=lines)
