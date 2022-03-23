@@ -83,13 +83,13 @@ static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const long gamma_scale = (1L << 10);
 static const long power_scale = (1L << 16);
 
-static int beta = -1;
-static int expected_flows = 10;
-static int gamma = 0.9 * gamma_scale;
+static int beta __read_mostly = -1;
+static int expected_flows __read_mostly = 10;
+static int gamma __read_mostly = 0.9 * gamma_scale;
 // TODO: Don't force selection of an algorithm variant. Ideally detect what's
 // possible on e.g. the first received ACK or even SYN(ACK)---with or without
 // INT.
-static int variant = POWERTCP_POWERTCP;
+static int variant __read_mostly = POWERTCP_POWERTCP;
 
 module_param(beta, int, 0444);
 MODULE_PARM_DESC(beta,
