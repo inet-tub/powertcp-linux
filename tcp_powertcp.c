@@ -382,7 +382,7 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
 		// TODO: Evaluate if it actually improves performance of the algorithm
 		// to reset those two values only on CA_EVENT_CWND_RESTART:
 		ca->rttptcp.last_updated = tp->snd_nxt;
-		ca->rttptcp.prev_rtt_us = base_rtt_us;
+		ca->rttptcp.prev_rtt_us = tp->srtt_us >> 3;
 	}
 
 	ca->rttptcp.t_prev = tp->tcp_mstamp;
