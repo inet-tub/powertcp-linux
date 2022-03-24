@@ -334,6 +334,7 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 
 	WARN_ONCE(norm_power < 0L, "norm_power must not be negative");
 
+	norm_power = max(norm_power, 1L);
 	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
 		(gamma_scale - gamma) * tp->snd_cwnd) /
 	       gamma_scale;
@@ -369,7 +370,8 @@ static long rttptcp_norm_power(const struct sock *sk,
 	}
 
 	rtt_us = get_rtt(sk, rs);
-	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
+	dt = max_t(long, 1L,
+		   tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev));
 	delta_t = min(dt, base_rtt_us);
 	rtt_grad =
 		max(power_scale * (rtt_us - ca->rttptcp.prev_rtt_us) / dt, 0L);
