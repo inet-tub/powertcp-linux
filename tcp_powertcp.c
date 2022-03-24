@@ -213,33 +213,15 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (base_rtt_us == -1L) {
-		base_rtt_us = get_base_rtt(sk, NULL);
-	}
-
-	/* We are always adapting beta even on a CA_EVENT_TX_START (no packets in
-	 * flight).
-	 */
-	if (beta < 0) {
-		/* We are actually looking whether the base RTT got smaller, but don't
-		 * want to remember that in a separate variable in struct powertcp.
-		 * Space is precious in there. All values besides the base RTT do not
-		 * change at runtime in the calculation of beta.
-		 */
-		ca->beta =
-			min_t(int,
-			      BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
-					    expected_flows / USEC_PER_SEC),
-			      ca->beta);
-	} else {
-		ca->beta = beta;
-	}
-
-	/* Only reset all other values for the calculations on a
-	 * CA_EVENT_CWND_RESTART (used on initialization). Otherwise we would reset
-	 * cwnd and rate too frequently if there are frequent CA_EVENT_TX_STARTs.
+	/* Only reset those values on a CA_EVENT_CWND_RESTART (used on
+	 * initialization). Otherwise we would reset cwnd and rate too frequently if
+	 * there are frequent CA_EVENT_TX_STARTs.
 	 */
 	if (ev == CA_EVENT_CWND_RESTART) {
+		if (base_rtt_us == -1L) {
+			base_rtt_us = get_base_rtt(sk, NULL);
+		}
+
 		/* Set the rate first, the initialization of snd_cwnd already uses it. */
 		set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
 		set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
@@ -261,6 +243,24 @@ static long smooth_power(long p_smooth, long p_norm, long base_rtt_us,
 				    (p_smooth * (base_rtt_us - delta_t) +
 			       (p_norm * delta_t)) /
 				      base_rtt_us;
+}
+
+static void update_beta(struct sock *sk, long base_rtt_us)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	if (beta < 0) {
+		/* We are actually looking whether the base RTT got smaller, but don't
+		 * want to remember that in a separate variable in struct powertcp.
+		 * Space is precious in there. All values besides the base RTT do not
+		 * change at runtime in the calculation of beta.
+		 */
+		ca->beta =
+			min_t(int,
+			      BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
+					    expected_flows / USEC_PER_SEC),
+			      ca->beta);
+	}
 }
 
 /* Update the list of recent snd_cwnds. */
@@ -461,7 +461,11 @@ static void powertcp_init(struct sock *sk)
 		ca->ops = &rttptcp_ops;
 	}
 
-	ca->beta = INT_MAX;
+	if (beta < 0) {
+		ca->beta = INT_MAX;
+	} else {
+		ca->beta = beta;
+	}
 	ca->host_bw = get_host_bw(sk);
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
@@ -493,6 +497,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	}
 
 	base_rtt_us = get_base_rtt(sk, rs);
+	update_beta(sk, base_rtt_us);
 
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->ops->norm_power(sk, rs, base_rtt_us);
