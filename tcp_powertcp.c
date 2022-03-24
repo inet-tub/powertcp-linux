@@ -330,10 +330,13 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
+	u32 cwnd;
 
-	u32 cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
-		    (gamma_scale - gamma) * tp->snd_cwnd) /
-		   gamma_scale;
+	WARN_ONCE(norm_power < 0L, "norm_power must not be negative");
+
+	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
+		(gamma_scale - gamma) * tp->snd_cwnd) /
+	       gamma_scale;
 	trace_update_window(tp->tcp_mstamp, sk->sk_hash, cwnd_old, tp->snd_cwnd,
 			    power_scale, norm_power, ca->beta, cwnd);
 	set_cwnd(tp, cwnd);
