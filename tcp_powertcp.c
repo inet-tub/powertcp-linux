@@ -197,6 +197,17 @@ static unsigned long get_host_bw(struct sock *sk)
 	return bw;
 }
 
+/* Return the most recently measured RTT (in us). */
+static long get_rtt(const struct sock *sk, const struct rate_sample *rs)
+{
+	const struct tcp_sock *tp = tcp_sk(sk);
+	long rtt = rs->rtt_us; /* This is -1 if unavailable. */
+	if (rtt < 0) {
+		rtt = tp->srtt_us >> 3;
+	}
+	return rtt;
+}
+
 static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
 {
 	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
@@ -348,16 +359,18 @@ static long rttptcp_norm_power(const struct sock *sk,
 	const struct tcp_sock *tp = tcp_sk(sk);
 	long dt, rtt_grad, p_norm, delta_t;
 	long p_smooth = ca->p_smooth;
+	long rtt_us;
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
 		return p_smooth > -1 ? p_smooth : power_scale;
 	}
 
+	rtt_us = get_rtt(sk, rs);
 	dt = tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev);
 	delta_t = min(dt, base_rtt_us);
-	rtt_grad = max(
-		power_scale * (rs->rtt_us - ca->rttptcp.prev_rtt_us) / dt, 0L);
-	p_norm = (rtt_grad + power_scale) * rs->rtt_us / base_rtt_us;
+	rtt_grad =
+		max(power_scale * (rtt_us - ca->rttptcp.prev_rtt_us) / dt, 0L);
+	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
 	p_smooth = smooth_power(p_smooth, p_norm, base_rtt_us, delta_t);
 
 	trace_norm_power(tp->tcp_mstamp, sk->sk_hash, dt, delta_t, rtt_grad,
@@ -403,7 +416,7 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	update_old(sk, p_smooth);
 
 	ca->rttptcp.last_updated = tp->snd_nxt;
-	ca->rttptcp.prev_rtt_us = rs->rtt_us;
+	ca->rttptcp.prev_rtt_us = get_rtt(sk, rs);
 	// TODO: There are multiple timestamps available here. Is there a better one?
 	ca->rttptcp.t_prev = tp->tcp_mstamp;
 
