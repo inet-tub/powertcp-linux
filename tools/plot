@@ -132,6 +132,7 @@ def main():
         argparser.add_argument("--fmt", default={}, type=ListStrToDict(str))
         argparser.add_argument("--max", default={}, type=ListStrToDict(float))
         argparser.add_argument("--min", default={}, type=ListStrToDict(float))
+        argparser.add_argument("--title")
         argparser.add_argument("--unit", default={}, type=ListStrToDict(str))
         argparser.add_argument("x", choices=COLUMNS)
         argparser.add_argument("y", choices=COLUMNS, nargs="+")
@@ -196,6 +197,7 @@ def main():
 
     if len(lines) > 1:
         ax.legend(handles=lines)
+    ax.set_title(args.title)
     fig.tight_layout()
     plt.show()
 
