@@ -7,6 +7,8 @@
 
 #include <linux/tracepoint.h>
 
+#define MEGA 1000000UL
+
 // clang-format off
 TRACE_EVENT(new_ack,
 	TP_PROTO(u64 time, unsigned int hash, u32 ack_seq, u32 cwnd,

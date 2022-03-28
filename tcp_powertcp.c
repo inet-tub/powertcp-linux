@@ -21,11 +21,12 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/types.h>
-#include <linux/units.h>
 #include <net/tcp.h>
 
 #define CREATE_TRACE_POINTS
 #include "tcp_powertcp_trace.h"
+
+#define MEGA 1000000UL
 
 enum powertcp_variant {
 	POWERTCP_POWERTCP = 0,
