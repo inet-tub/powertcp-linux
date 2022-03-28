@@ -212,6 +212,9 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 
 		clear_old_cwnds(sk);
 	}
+
+	trace_reset(tp->tcp_mstamp, sk->sk_hash, ev, base_rtt_us, tp->snd_cwnd,
+		    sk->sk_pacing_rate);
 }
 
 static long smooth_power(long p_smooth, long p_norm, long base_rtt_us,

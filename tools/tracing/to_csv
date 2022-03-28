@@ -1,19 +1,32 @@
 #!/usr/bin/env bpftrace
 
+#include <net/tcp.h>
+
 BEGIN
 {
-	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate");
+	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate,ev");
 }
 
 tracepoint:powertcp:new_ack
 {
-	printf("%llu,%u,%u,%ld,%d,%u,%lu\n", args->time, args->hash, args->ack_seq,
+	printf("%llu,%u,%u,%ld,%d,%u,%lu,\n", args->time, args->hash, args->ack_seq,
 		@base_rtt[tid], @beta[tid], args->cwnd, args->rate);
 }
 
 tracepoint:powertcp:norm_power
 {
 	@base_rtt[tid] = args->base_rtt;
+}
+
+tracepoint:powertcp:reset
+{
+	if (args->ev != CA_EVENT_CWND_RESTART && @beta[tid] > 0) {
+		printf("%llu,%u,,%ld,%d,%u,%lu,%d\n", args->time, args->hash,
+			args->base_rtt, @beta[tid], args->cwnd, args->rate, args->ev);
+	} else {
+		printf("%llu,%u,,%ld,,%u,%lu,%d\n", args->time, args->hash,
+			args->base_rtt, args->cwnd, args->rate, args->ev);
+	}
 }
 
 tracepoint:powertcp:update_window

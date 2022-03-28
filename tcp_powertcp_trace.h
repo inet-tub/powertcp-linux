@@ -77,6 +77,32 @@ TRACE_EVENT(norm_power,
 		__entry->p_smooth)
 )
 
+TRACE_EVENT(reset,
+	TP_PROTO(u64 time, unsigned int hash, enum tcp_ca_event ev, long base_rtt,
+		u32 cwnd, unsigned long rate),
+	TP_ARGS(time, hash, ev, base_rtt, cwnd, rate),
+	TP_STRUCT__entry(
+		__field(u64, time)
+		__field(unsigned int, hash)
+		__field(enum tcp_ca_event, ev)
+		__field(long, base_rtt)
+		__field(u32, cwnd)
+		__field(unsigned long, rate)
+	),
+	TP_fast_assign(
+		__entry->time = time;
+		__entry->hash = hash;
+		__entry->ev = ev;
+		__entry->base_rtt = base_rtt;
+		__entry->cwnd = cwnd;
+		__entry->rate = rate;
+	),
+	TP_printk(
+		"time=%llu us hash=%u: ev=%d base_rtt=%ld cwnd=%u rate=%lu bytes/s (~%lu Mbit/s)",
+		__entry->time, __entry->hash, __entry->ev, __entry->base_rtt,
+		__entry->cwnd, __entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
+);
+
 TRACE_EVENT(update_window,
 	TP_PROTO(const struct sock *sk, u32 cwnd_old, long power_scale, long p_norm,
 		u32 cwnd),

@@ -17,6 +17,7 @@ COLUMNS = (
     "base_rtt",
     "beta",
     "cwnd",
+    "ev",
     "hash",
     "rate",
     "time",
@@ -31,6 +32,7 @@ LABELS = {
     "base_rtt": "Base RTT",
     "beta": "Additive increase β",
     "cwnd": "Congestion window",
+    "ev": "Resets",
     "rate": "Transmission rate",
     "time": "Time",
 }
@@ -54,6 +56,7 @@ UNITS = {
     "base_rtt": ("us", "ms", "s"),
     "beta": ("bytes",),
     "cwnd": ("bytes",),
+    "ev": (None,),
     "rate": ("bytes/s", "bit/s"),
     "time": ("us", "ms", "s"),
 }
@@ -142,7 +145,7 @@ def main():
 
     args = argparser.parse_args(remaining_argv, early_args)
 
-    df = pd.read_csv(args.csv_file).dropna()
+    df = pd.read_csv(args.csv_file)
     df["time"] -= df["time"].min()
 
     if args.info:
@@ -186,17 +189,36 @@ def main():
             return e
         df[y] *= UNIT_FACTORS.get(yunit, 1)
 
-        try:
-            axx = axx.twinx()
-        except AttributeError:
-            axx = ax
+        if y == "ev":
+            lines.append(
+                ax.vlines(
+                    df.loc[df[y].notna(), args.x],
+                    0,
+                    1,
+                    color="lightgrey",
+                    label=LABELS.get(y),
+                    transform=ax.get_xaxis_transform(),
+                )
+            )
+        else:
+            try:
+                axx = axx.twinx()
+            except AttributeError:
+                axx = ax
 
-        lines.extend(
-            axx.plot(args.x, y, yfmt, color=ycolor, data=df, label=LABELS.get(y, y))
-        )
-        axx.set_ylabel(LABELS.get(y, y))
-        set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
-        setup_axis(axx.yaxis, y, yunit)
+            lines.extend(
+                axx.plot(
+                    args.x,
+                    y,
+                    yfmt,
+                    color=ycolor,
+                    data=df[df.notna()],
+                    label=LABELS.get(y, y),
+                )
+            )
+            axx.set_ylabel(LABELS.get(y, y))
+            set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
+            setup_axis(axx.yaxis, y, yunit)
 
     if len(lines) > 1:
         ax.legend(handles=lines)
