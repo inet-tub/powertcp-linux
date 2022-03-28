@@ -4,10 +4,36 @@
 
 #include "powertcp_defs.h"
 
+#ifdef POWERTCP_INT_HEADER_FILE
+#include <linux/stringify.h>
+
+/*
+ * The header of an INT implementation must provide:
+ *
+ *    enum { max_n_hops };
+ */
+#include __stringify(POWERTCP_INT_HEADER_FILE)
+#endif
+
 #include <linux/list.h>
 
 #ifndef MEGA
 #define MEGA 1000000UL
+#endif
+
+#ifdef POWERTCP_INT_HEADER_FILE
+struct powertcp_hop_int {
+	u32 bandwidth;
+	u32 ts;
+	u32 tx_bytes;
+	u32 qlen;
+};
+
+struct powertcp_int {
+	int n_hop;
+	int path_id;
+	struct powertcp_hop_int hops[max_n_hops];
+};
 #endif
 
 struct powertcp {
@@ -15,9 +41,12 @@ struct powertcp {
 	unsigned long snd_cwnd;
 
 	union {
+#ifdef POWERTCP_INT_HEADER_FILE
 		struct {
-			// TODO: Add variant-specific members as needed.
+			struct powertcp_int curr_int;
+			struct powertcp_int prev_int;
 		} ptcp;
+#endif
 		struct {
 			u32 last_updated;
 			unsigned long prev_rtt_us;

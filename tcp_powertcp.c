@@ -39,21 +39,6 @@ struct old_cwnd {
 	struct list_head list;
 };
 
-enum { max_n_hops = 1 };
-
-struct powertcp_hop_int {
-	u32 bandwidth;
-	u32 ts;
-	u32 tx_bytes;
-	u32 qlen;
-};
-
-struct powertcp_int {
-	int n_hop;
-	int path_id;
-	struct powertcp_hop_int hops[max_n_hops];
-};
-
 static int base_rtt __read_mostly = default_base_rtt;
 static int beta __read_mostly = default_beta;
 static int expected_flows __read_mostly = default_expected_flows;
@@ -77,6 +62,23 @@ module_param(host_bw, int, 0444);
 MODULE_PARM_DESC(
 	host_bw,
 	"bandwidth of the host network interface(s) in Mbit/s (default: -1; -1: detect automatically from socket)");
+
+#ifdef POWERTCP_INT_IMPL_FILE
+/*
+ * To enable more optimizations, inlining---in lack of link-time
+ * optimizations---we include the implementation directly here instead of using
+ * a separately compiled object file.
+ *
+ * An INT implementation must provide:
+ *
+ *    static const struct powertcp_int *get_int(struct sock *sk, const struct
+ *                                              powertcp_int *prev_int);
+ *    static const struct powertcp_int *get_prev_int(struct sock *sk);
+ *    static void register_int(struct tcp_congestion_ops *cong_ops);
+ *    static void unregister_int(struct tcp_congestion_ops *cong_ops);
+ */
+#include __stringify(POWERTCP_INT_IMPL_FILE)
+#endif
 
 static void clear_old_cwnds(struct sock *sk)
 {
@@ -152,17 +154,6 @@ static unsigned long get_host_bw(struct sock *sk)
 	}
 
 	return bw;
-}
-
-static const struct powertcp_int *get_int(struct sock *sk,
-					  const struct powertcp_int *prev_int)
-{
-	return NULL;
-}
-
-static const struct powertcp_int *get_prev_int(struct sock *sk)
-{
-	return NULL;
 }
 
 /* Return the most recently measured RTT (in us). */
@@ -342,6 +333,7 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 	return cwnd;
 }
 
+#ifdef POWERTCP_INT_IMPL_FILE
 static unsigned long ptcp_norm_power(struct sock *sk,
 				     const struct rate_sample *rs)
 {
@@ -423,6 +415,7 @@ static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 {
 	return update_window(sk, cwnd_old, norm_power);
 }
+#endif
 
 static unsigned long rttptcp_norm_power(const struct sock *sk,
 					const struct rate_sample *rs)
@@ -608,7 +601,9 @@ static u32 powertcp_undo_cwnd(struct sock *sk)
 	return tcp_sk(sk)->snd_cwnd;
 }
 
+#ifdef POWERTCP_INT_IMPL_FILE
 DEFINE_POWERTCP_VARIANT(ptcp, powertcp);
+#endif
 DEFINE_POWERTCP_VARIANT(rttptcp, rttpowertcp);
 
 static int __init powertcp_register(void)
@@ -617,10 +612,18 @@ static int __init powertcp_register(void)
 
 	BUILD_BUG_ON(sizeof(struct powertcp) > ICSK_CA_PRIV_SIZE);
 
+#ifdef POWERTCP_INT_IMPL_FILE
 	ret = tcp_register_congestion_control(&powertcp);
 	if (ret) {
 		return ret;
 	}
+
+	ret = register_int(&powertcp);
+	if (ret) {
+		tcp_unregister_congestion_control(&powertcp);
+		return ret;
+	}
+#endif
 
 	ret = tcp_register_congestion_control(&rttpowertcp);
 	if (ret) {
@@ -632,7 +635,10 @@ static int __init powertcp_register(void)
 
 static void __exit powertcp_unregister(void)
 {
+#ifdef POWERTCP_INT_IMPL_FILE
+	unregister_int(&powertcp);
 	tcp_unregister_congestion_control(&powertcp);
+#endif
 	tcp_unregister_congestion_control(&rttpowertcp);
 }
 

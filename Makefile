@@ -1,10 +1,18 @@
 ifneq ($(KERNELRELEASE),)
 
+# Default INT implementation (there is no other at the moment, anyway)
+POWERTCP_INT_IMPL ?= hpcc
+
 # Without explicitly specifying the source folder as an include dir,
 # define_trace.h fails to find our trace header.
 ccflags-y := -I$(src)
 
 obj-m := tcp_powertcp.o
+
+ifneq ($(POWERTCP_INT_IMPL),)
+	ccflags-y += -DPOWERTCP_INT_HEADER_FILE=int_$(POWERTCP_INT_IMPL).h
+	ccflags-y += -DPOWERTCP_INT_IMPL_FILE=int_$(POWERTCP_INT_IMPL).c
+endif
 
 else
 
