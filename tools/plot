@@ -23,6 +23,10 @@ COLUMNS = (
     "time",
 )
 
+FORMATS = {
+    "ack_seq": ".",
+}
+
 LABELS = {
     "ack_seq": "ACK'ed sequence #",
     "base_rtt": "Base RTT",
@@ -173,7 +177,7 @@ def main():
             return f"cannot use the same column “{args.x}” for x and y axis"
 
         ycolor = COLORS[i % len(COLORS)]
-        yfmt = args.fmt.get(y) or "-"
+        yfmt = args.fmt.get(y) or FORMATS.get(y, "-")
         ymax = args.max.get(y)
         ymin = args.min.get(y)
         yunit = args.unit.get(y)
