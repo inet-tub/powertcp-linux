@@ -62,12 +62,12 @@ struct powertcp {
 		} rttptcp;
 	};
 
+	/* powertcp_cong_control() seems to (unexpectedly) get called once before
+	 * powertcp_init(). ops is still NULL then, thanks to
+	 * tcp_assign_congestion_control(), and we use that as an indicator whether
+	 * we are initialized.
+	 */
 	const struct powertcp_ops *ops;
-
-	// powertcp_cong_control() seems to (unexpectedly) get called once before
-	// powertcp_init(). Remember whether we did the initialization.
-	// TODO: Check, why that's the case.
-	bool initialized;
 
 	int beta;
 
@@ -459,7 +459,7 @@ void powertcp_cwnd_event(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 
-	if (unlikely(!ca->initialized)) {
+	if (unlikely(!ca->ops)) {
 		return;
 	}
 
@@ -488,8 +488,6 @@ static void powertcp_init(struct sock *sk)
 	ca->host_bw = get_host_bw(sk);
 	INIT_LIST_HEAD(&ca->old_cwnds);
 
-	/* Must be already (marked) initialized for reset() to work: */
-	ca->initialized = true;
 	ca->ops->reset(sk, CA_EVENT_CWND_RESTART, -1);
 
 	/* We do want sk_pacing_rate to be respected: */
@@ -511,7 +509,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	long base_rtt_us;
 	bool updated;
 
-	if (unlikely(!ca->initialized)) {
+	if (unlikely(!ca->ops)) {
 		return;
 	}
 
@@ -535,7 +533,7 @@ static void powertcp_release(struct sock *sk)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 
-	if (unlikely(!ca->initialized)) {
+	if (unlikely(!ca->ops)) {
 		return;
 	}
 
