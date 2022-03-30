@@ -15,9 +15,10 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include "tcp_powertcp.h"
+
 #include <linux/ethtool.h>
 #include <linux/init.h>
-#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/types.h>
@@ -46,38 +47,6 @@ struct powertcp_ops {
 	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
 			   long p_smooth);
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
-};
-
-struct powertcp {
-	// TODO: Sort members in a cache-friendly way if necessary.
-
-	union {
-		struct {
-			// TODO: Add variant-specific members as needed.
-		} ptcp;
-		struct {
-			u32 last_updated;
-			long prev_rtt_us;
-			u64 t_prev;
-		} rttptcp;
-	};
-
-	/* powertcp_cong_control() seems to (unexpectedly) get called once before
-	 * powertcp_init(). ops is still NULL then, thanks to
-	 * tcp_assign_congestion_control(), and we use that as an indicator whether
-	 * we are initialized.
-	 */
-	const struct powertcp_ops *ops;
-
-	int beta;
-
-	// TODO: Investigate if this frequently updated list decreases performance
-	// and another data structure would improve that.
-	struct list_head old_cwnds;
-
-	long p_smooth;
-
-	unsigned long host_bw; /* Mbit/s */
 };
 
 static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
@@ -339,8 +308,7 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
 		(gamma_scale - gamma) * tp->snd_cwnd) /
 	       gamma_scale;
-	trace_update_window(tp->tcp_mstamp, sk->sk_hash, cwnd_old, tp->snd_cwnd,
-			    power_scale, norm_power, ca->beta, cwnd);
+	trace_update_window(sk, cwnd_old, power_scale, norm_power, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
@@ -379,9 +347,8 @@ static long rttptcp_norm_power(const struct sock *sk,
 	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
 	p_smooth = smooth_power(p_smooth, p_norm, base_rtt_us, delta_t);
 
-	trace_norm_power(tp->tcp_mstamp, sk->sk_hash, dt, delta_t, rtt_grad,
-			 base_rtt_us, power_scale, p_norm, ca->p_smooth,
-			 p_smooth);
+	trace_norm_power(sk, dt, delta_t, rtt_us, rtt_grad, base_rtt_us,
+			 power_scale, p_norm, p_smooth);
 
 	return p_smooth;
 }
@@ -501,7 +468,6 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
-	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 cwnd_old;
 	long norm_power;
 	u32 cwnd;
@@ -524,8 +490,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	updated = ca->ops->update_old(sk, rs, norm_power);
 
 	if (updated) {
-		trace_new_ack(tp->tcp_mstamp, sk->sk_hash, tp->snd_una, cwnd,
-			      rate);
+		trace_new_ack(sk);
 	}
 }
 
