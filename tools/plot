@@ -3,11 +3,10 @@
 import argparse
 import sys
 
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
-
+import pandas as pd
 
 # "CN color spec", see https://matplotlib.org/stable/tutorials/colors/colors.html#specifying-colors
 COLORS = [f"C{i}" for i in range(11)]
