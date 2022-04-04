@@ -157,7 +157,7 @@ def main():
     df = df.drop(columns="power_scale")
 
     if args.info:
-        pd.options.display.float_format = "{:.0f}".format
+        pd.options.display.float_format = "{:06.4f}".format
         df.info()
         print(f"\n{df.describe(percentiles=[])}")
         return
