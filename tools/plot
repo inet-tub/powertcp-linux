@@ -162,9 +162,6 @@ def main():
         print(f"\n{df.describe(percentiles=[])}")
         return
 
-    if len(args.y) > 2:
-        return "cannot pass more than 2 columns as y axis"
-
     xunit = args.unit.get(args.x)
     try:
         xunit = check_unit(args.x, xunit)
@@ -197,6 +194,12 @@ def main():
             return e
         df[y] *= UNIT_FACTORS.get(yunit, 1)
 
+        if axx is not None and y not in ("ev",):
+            axx = ax.twinx()
+            axx.spines["right"].set_position(("outward", (len(lines) - 1) * 50))
+        else:
+            axx = ax
+
         if y == "ev":
             lines.append(
                 ax.vlines(
@@ -209,11 +212,6 @@ def main():
                 )
             )
         else:
-            try:
-                axx = axx.twinx()
-            except AttributeError:
-                axx = ax
-
             lines.extend(
                 axx.plot(
                     args.x,
