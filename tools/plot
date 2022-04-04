@@ -19,6 +19,7 @@ COLUMNS = (
     "cwnd",
     "ev",
     "hash",
+    "p_norm",
     "rate",
     "time",
 )
@@ -33,6 +34,7 @@ LABELS = {
     "beta": "Additive increase β",
     "cwnd": "Congestion window",
     "ev": "Resets",
+    "p_norm": "Normalized power",
     "rate": "Transmission rate",
     "time": "Time",
 }
@@ -42,6 +44,7 @@ LIMITS = {
 }
 
 PRETTY_UNITS = {
+    "bit^2/s": r"$\frac{bit^2}{s}$",
     "us": "µs",
 }
 
@@ -57,6 +60,7 @@ UNITS = {
     "beta": ("bytes",),
     "cwnd": ("bytes",),
     "ev": (None,),
+    "p_norm": ("bit^2/s",),
     "rate": ("bytes/s", "bit/s"),
     "time": ("us", "ms", "s"),
 }
@@ -111,6 +115,8 @@ def setup_axis(axis, col, unit):
     else:
         if unit in ("bit/s", "bytes/s"):
             axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit))
+        if unit in ("bit^2/s",):
+            axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit, usetex=True))
         elif unit in ("s", "ms", "us"):
             precision = 0
             if unit == "s":
@@ -147,6 +153,8 @@ def main():
 
     df = pd.read_csv(args.csv_file)
     df["time"] -= df["time"].min()
+    df["p_norm"] /= df["power_scale"]
+    df = df.drop(columns="power_scale")
 
     if args.info:
         pd.options.display.float_format = "{:.0f}".format

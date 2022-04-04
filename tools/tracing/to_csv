@@ -4,13 +4,14 @@
 
 BEGIN
 {
-	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate,ev");
+	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate,power_scale,p_norm,ev");
 }
 
 tracepoint:powertcp:new_ack
 {
-	printf("%llu,%u,%u,%ld,%d,%u,%lu,\n", args->time, args->hash, args->ack_seq,
-		@base_rtt[tid], @beta[tid], args->cwnd, args->rate);
+	printf("%llu,%u,%u,%ld,%d,%u,%lu,%ld,%ld,\n", args->time, args->hash,
+		args->ack_seq, @base_rtt[tid], @beta[tid], args->cwnd, args->rate,
+		@power_scale[tid], @p_norm[tid]);
 }
 
 tracepoint:powertcp:norm_power
@@ -21,10 +22,11 @@ tracepoint:powertcp:norm_power
 tracepoint:powertcp:reset
 {
 	if (args->ev != CA_EVENT_CWND_RESTART && @beta[tid] > 0) {
-		printf("%llu,%u,,%ld,%d,%u,%lu,%d\n", args->time, args->hash,
-			args->base_rtt, @beta[tid], args->cwnd, args->rate, args->ev);
+		printf("%llu,%u,,%ld,%d,%u,%lu,%ld,%ld,%d\n", args->time, args->hash,
+			args->base_rtt, @beta[tid], args->cwnd, args->rate,
+			@power_scale[tid], @p_norm[tid], args->ev);
 	} else {
-		printf("%llu,%u,,%ld,,%u,%lu,%d\n", args->time, args->hash,
+		printf("%llu,%u,,%ld,,%u,%lu,,,%d\n", args->time, args->hash,
 			args->base_rtt, args->cwnd, args->rate, args->ev);
 	}
 }
@@ -32,4 +34,6 @@ tracepoint:powertcp:reset
 tracepoint:powertcp:update_window
 {
 	@beta[tid] = args->beta;
+	@power_scale[tid] = args->power_scale;
+	@p_norm[tid] = args->p_norm;
 }
