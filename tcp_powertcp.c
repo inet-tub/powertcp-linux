@@ -49,6 +49,7 @@ struct powertcp_ops {
 	u32 (*update_window)(struct sock *sk, u32 cwnd_old, long norm_power);
 };
 
+const long beta_scale = (1L << 10);
 static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const long gamma_scale = (1L << 10);
 static const long power_scale = (1L << 16);
@@ -205,7 +206,8 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 
 		/* Set the rate first, the initialization of snd_cwnd already uses it. */
 		set_rate(sk, BITS_TO_BYTES(MEGA * ca->host_bw));
-		set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / USEC_PER_SEC);
+		set_cwnd(tp, sk->sk_pacing_rate * base_rtt_us / tp->mss_cache /
+				     USEC_PER_SEC);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
 		ca->p_smooth = -1;
@@ -232,18 +234,19 @@ static long smooth_power(long p_smooth, long p_norm, long base_rtt_us,
 static void update_beta(struct sock *sk, long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (beta < 0) {
 		/* We are actually looking whether the base RTT got smaller, but don't
 		 * want to remember that in a separate variable in struct powertcp.
-		 * Space is precious in there. All values besides the base RTT do not
-		 * change at runtime in the calculation of beta.
+		 * Space is precious in there. All values besides the base RTT and,
+		 * rarely, the MSS do not change at runtime in the calculation of beta.
 		 */
-		ca->beta =
-			min_t(int,
-			      BITS_TO_BYTES((MEGA * ca->host_bw * base_rtt_us) /
-					    expected_flows / USEC_PER_SEC),
-			      ca->beta);
+		int new_beta =
+			BITS_TO_BYTES(beta_scale /* * MEGA */ * ca->host_bw *
+				      base_rtt_us / expected_flows) /
+			tp->mss_cache /* / USEC_PER_SEC */;
+		ca->beta = min(ca->beta, new_beta);
 	}
 }
 
@@ -308,9 +311,12 @@ static u32 update_window(struct sock *sk, u32 cwnd_old, long norm_power)
 	WARN_ONCE(norm_power < 0L, "norm_power must not be negative");
 
 	norm_power = max(norm_power, 1L);
-	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
+	cwnd = ((gamma *
+		 (beta_scale * power_scale * cwnd_old / norm_power + ca->beta) /
+		 beta_scale) +
 		(gamma_scale - gamma) * tp->snd_cwnd) /
 	       gamma_scale;
+	cwnd = max(1U, cwnd);
 	trace_update_window(sk, cwnd_old, power_scale, norm_power, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
@@ -471,6 +477,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	*/
 
 	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 cwnd_old;
 	long norm_power;
 	u32 cwnd;
@@ -488,7 +495,8 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->ops->norm_power(sk, rs, base_rtt_us);
 	cwnd = ca->ops->update_window(sk, cwnd_old, norm_power);
-	rate = (USEC_PER_SEC * cwnd) / base_rtt_us;
+	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) /
+	       (unsigned long)base_rtt_us;
 	set_rate(sk, rate);
 	updated = ca->ops->update_old(sk, rs, norm_power);
 
