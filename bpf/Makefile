@@ -26,7 +26,7 @@ all: $(BPF_OBJS)
 
 .PHONY: clean
 clean:
-	$(RM) -r -- $(INCLUDE_DIR) *.o
+	$(RM) -r -- $(INCLUDE_DIR) $(BPF_OBJS)
 
 $(INCLUDE_DIR):
 	mkdir $(INCLUDE_DIR)
