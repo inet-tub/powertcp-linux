@@ -15,6 +15,8 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include "bpf_ca_helpers.h"
+
 #include "vmlinux.h"
 
 #include <bpf/bpf_helpers.h>
@@ -64,56 +66,6 @@ int base_rtt = -1;
 int beta = -1;
 int expected_flows = 10;
 int gamma = 0.9 * gamma_scale;
-
-/* NOTE: Would need to reimplement some of those (mostly trivial) functions and
- * macros ourselves, when using vmlinux.h instead of bpf_tcp_helpers.h. Have to
- * see if that's worth it ("it" means using the generated vmlinux.h instead of
- * requiring unpacked Linux sources for access to bpf_tcp_helpers.h).
- */
-#define __KERNEL_DIV_ROUND_UP(n, d) (((n) + (d)-1) / (d))
-#define BITS_PER_BYTE 8
-#define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
-#define BITS_TO_BYTES(nr) __KERNEL_DIV_ROUND_UP(nr, BITS_PER_TYPE(char))
-#define BUILD_BUG_ON(cond)                                                     \
-	if (cond) {                                                            \
-		__bpf_unreachable();                                           \
-	}
-#define max(x, y) (((x) > (y)) ? (x) : (y))
-#define max_t(type, x, y) max((type)(x), (type)(y))
-#define min(x, y) (((x) < (y)) ? (x) : (y))
-#define min_t(type, x, y) min((type)(x), (type)(y))
-
-static inline bool before(__u32 seq1, __u32 seq2)
-{
-	return (__s32)(seq1 - seq2) < 0;
-}
-#define after(seq2, seq1) before(seq1, seq2)
-
-static inline struct inet_connection_sock *inet_csk(const struct sock *sk)
-{
-	return (struct inet_connection_sock *)sk;
-}
-
-static inline void *inet_csk_ca(const struct sock *sk)
-{
-	return (void *)inet_csk(sk)->icsk_ca_priv;
-}
-
-/* Minimum RTT in usec. ~0 means not available. */
-static inline __u32 tcp_min_rtt(const struct tcp_sock *tp)
-{
-	return tp->rtt_min.s[0].v;
-}
-
-static inline struct tcp_sock *tcp_sk(const struct sock *sk)
-{
-	return (struct tcp_sock *)sk;
-}
-
-static inline __u32 tcp_stamp_us_delta(__u64 t1, __u64 t0)
-{
-	return max_t(__s64, t1 - t0, 0);
-}
 
 /* Look for the base (~= minimum) RTT (in us). */
 static long get_base_rtt(const struct sock *sk, const struct rate_sample *rs)
