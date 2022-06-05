@@ -32,10 +32,10 @@ clean:
 $(INCLUDE_DIR):
 	mkdir $(INCLUDE_DIR)
 
-$(INCLUDE_DIR)/vmlinux.h: Makefile | $(INCLUDE_DIR)
+$(INCLUDE_DIR)/vmlinux.h: | $(INCLUDE_DIR)
 	$(BPFTOOL) btf dump file $(VMLINUX) format c > $@
 
-%.bpf.o: %.bpf.c Makefile $(INCLUDE_DIR)/vmlinux.h
+%.bpf.o: %.bpf.c $(INCLUDE_DIR)/vmlinux.h
 	$(CLANG) $(CFLAGS) $< -o $@
 	$(LLVM_STRIP) -g $@
 
