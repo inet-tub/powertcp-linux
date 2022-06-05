@@ -8,6 +8,7 @@ HAVE_WRITABLE_SK_PACING ?= 0
 BPF_OBJS := rtt_powertcp.bpf.o
 BPF_DEPS := $(BPF_OBJS:.o=.d)
 INCLUDE_DIR := .include
+VMLINUX_H := $(INCLUDE_DIR)/vmlinux.h
 
 # Copied from Linux' tools/scripts/Makefile.arch:
 ARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
@@ -32,10 +33,10 @@ clean:
 $(INCLUDE_DIR):
 	mkdir -p $@
 
-$(INCLUDE_DIR)/vmlinux.h: $(VMLINUX) | $(INCLUDE_DIR)
-	$(BPFTOOL) btf dump file $(VMLINUX) format c > $@
+$(VMLINUX_H): $(VMLINUX) | $(INCLUDE_DIR)
+	$(BPFTOOL) btf dump file $< format c > $@
 
-%.bpf.o: %.bpf.c $(INCLUDE_DIR)/vmlinux.h
+%.bpf.o: %.bpf.c $(VMLINUX_H)
 	$(CLANG) $(CFLAGS) $< -o $@
 	$(LLVM_STRIP) -g $@
 
