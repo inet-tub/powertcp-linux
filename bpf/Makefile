@@ -30,7 +30,7 @@ clean:
 	$(RM) -r -- $(INCLUDE_DIR) $(BPF_DEPS) $(BPF_OBJS)
 
 $(INCLUDE_DIR):
-	mkdir $(INCLUDE_DIR)
+	mkdir -p $@
 
 $(INCLUDE_DIR)/vmlinux.h: | $(INCLUDE_DIR)
 	$(BPFTOOL) btf dump file $(VMLINUX) format c > $@
