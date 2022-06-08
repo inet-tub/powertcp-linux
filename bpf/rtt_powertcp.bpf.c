@@ -392,10 +392,15 @@ void BPF_PROG(powertcp_init, struct sock *sk)
 	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
 	 * a BPF TCP CC. */
 	/* We do want sk_pacing_rate to be respected: */
+#if __clang_major__ >= 12
 	//cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
+	__sync_bool_compare_and_swap(&sk->sk_pacing_status, SK_PACING_NONE,
+				     SK_PACING_NEEDED);
+#else
 	if (sk->sk_pacing_status == SK_PACING_NONE) {
 		sk->sk_pacing_status = SK_PACING_NEEDED;
 	}
+#endif
 #endif
 }
 
