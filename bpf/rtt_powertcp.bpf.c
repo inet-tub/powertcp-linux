@@ -29,6 +29,11 @@ char _license[] SEC("license") = "Dual MIT/GPL";
 #define TCP_INFINITE_SSTHRESH 0x7fffffff
 #define USEC_PER_SEC 1000000L
 
+#if !HAVE_WRITABLE_SK_PACING
+#define SO_MAX_PACING_RATE 47
+#define SOL_TCP 6
+#endif
+
 struct old_cwnd {
 	__u32 snd_nxt;
 	__u32 cwnd;
@@ -174,6 +179,12 @@ static void set_rate(struct sock *sk, unsigned long rate)
 	/* TODO: May have to patch the kernel to be able to set sk_pacing_rate from
 	 * a BPF TCP CC. */
 	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+#else
+	/* bpf_setsockopt() only accepts an int for this option: */
+	int irate = ~0U;
+	bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate, sizeof(irate));
+	irate = rate;
+	bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate, sizeof(irate));
 #endif
 }
 
