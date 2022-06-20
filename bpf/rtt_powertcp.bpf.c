@@ -277,9 +277,9 @@ static __u32 update_window(struct sock *sk, __u32 cwnd_old, long norm_power)
 	norm_power = max(norm_power, 1L);
 	cwnd = ((gamma *
 		 (beta_scale * power_scale * cwnd_old / norm_power + ca->beta) /
-		 beta_scale) +
+		 (unsigned long)beta_scale) +
 		(gamma_scale - gamma) * tp->snd_cwnd) /
-	       gamma_scale;
+	       (unsigned long)gamma_scale;
 	cwnd = max(1U, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
