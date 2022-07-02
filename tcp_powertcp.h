@@ -19,7 +19,7 @@ struct powertcp {
 		} ptcp;
 		struct {
 			u32 last_updated;
-			long prev_rtt_us;
+			unsigned long prev_rtt_us;
 			u64 t_prev;
 		} rttptcp;
 	};
@@ -31,13 +31,13 @@ struct powertcp {
 	 */
 	const struct powertcp_ops *ops;
 
-	int beta;
+	unsigned long beta;
 
 	// TODO: Investigate if this frequently updated list decreases performance
 	// and another data structure would improve that.
 	struct list_head old_cwnds;
 
-	long p_smooth;
+	unsigned long p_smooth;
 
 	unsigned long host_bw; /* Mbit/s */
 };

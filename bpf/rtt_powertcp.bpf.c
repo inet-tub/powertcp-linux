@@ -24,9 +24,9 @@
 
 char _license[] SEC("license") = "Dual MIT/GPL";
 
-#define INT_MAX 2147483647
 #define MEGA 1000000UL
 #define TCP_INFINITE_SSTHRESH 0x7fffffff
+#define ULONG_MAX (-1UL)
 #define USEC_PER_SEC 1000000L
 
 #if !HAVE_WRITABLE_SK_PACING
@@ -44,15 +44,15 @@ struct powertcp {
 
 	struct {
 		__u32 last_updated;
-		long prev_rtt_us;
+		unsigned long prev_rtt_us;
 		__u64 t_prev;
 	} rttptcp;
 
-	int beta;
+	unsigned long beta;
 
 	struct old_cwnd old_cwnd;
 
-	long p_smooth;
+	unsigned long p_smooth;
 
 	/* powertcp_cong_control() seems to (unexpectedly) get called once before
 	 * powertcp_init(). host_bw is still 0 then, thanks to
@@ -62,10 +62,10 @@ struct powertcp {
 	unsigned long host_bw; /* Mbit/s */
 };
 
-const long beta_scale = (1L << 10);
+const unsigned long beta_scale = (1UL << 10);
 const unsigned long fallback_host_bw = 1000; /* Mbit/s */
-const long gamma_scale = (1L << 10);
-const long power_scale = (1L << 16);
+const unsigned long gamma_scale = (1UL << 10);
+const unsigned long power_scale = (1UL << 16);
 
 int base_rtt = -1;
 int beta = -1;
@@ -73,7 +73,8 @@ int expected_flows = 10;
 int gamma = 0.9 * gamma_scale;
 
 /* Look for the base (~= minimum) RTT (in us). */
-static long get_base_rtt(const struct sock *sk, const struct rate_sample *rs)
+static unsigned long get_base_rtt(const struct sock *sk,
+				  const struct rate_sample *rs)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	__u32 min_rtt;
@@ -157,7 +158,8 @@ static unsigned long get_host_bw(struct sock *sk)
 }
 
 /* Return the most recently measured RTT (in us). */
-static long get_rtt(const struct sock *sk, const struct rate_sample *rs)
+static unsigned long get_rtt(const struct sock *sk,
+			     const struct rate_sample *rs)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	long rtt = rs->rtt_us; /* This is -1 if unavailable. */
@@ -188,7 +190,8 @@ static void set_rate(struct sock *sk, unsigned long rate)
 #endif
 }
 
-static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
+static void reset(struct sock *sk, enum tcp_ca_event ev,
+		  unsigned long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -200,7 +203,7 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 	 * there are frequent CA_EVENT_TX_STARTs.
 	 */
 	if (ev == CA_EVENT_CWND_RESTART) {
-		if (base_rtt_us == -1L) {
+		if (base_rtt_us == 0) {
 			base_rtt_us = get_base_rtt(sk, NULL);
 		}
 
@@ -210,25 +213,26 @@ static void reset(struct sock *sk, enum tcp_ca_event ev, long base_rtt_us)
 		set_cwnd(tp, cwnd);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
-		ca->p_smooth = -1;
+		ca->p_smooth = 0;
 
 		clear_old_cwnds(sk);
 	}
 }
 
-static long smooth_power(long p_smooth, long p_norm, long base_rtt_us,
-			 long delta_t)
+static unsigned long smooth_power(unsigned long p_smooth, unsigned long p_norm,
+				  unsigned long base_rtt_us,
+				  unsigned long delta_t)
 {
-	/* powertcp.p_smooth is initialized with -1, we don't want to smooth for the
+	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
 	 */
-	return p_smooth < 0 ? p_norm :
-				    (p_smooth * (base_rtt_us - delta_t) +
-			       (p_norm * delta_t)) /
-				      (unsigned long)base_rtt_us;
+	return p_smooth == 0 ? p_norm :
+				     (p_smooth * (base_rtt_us - delta_t) +
+				(p_norm * delta_t)) /
+				       base_rtt_us;
 }
 
-static void update_beta(struct sock *sk, long base_rtt_us)
+static void update_beta(struct sock *sk, unsigned long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -239,7 +243,7 @@ static void update_beta(struct sock *sk, long base_rtt_us)
 		 * Space is precious in there. All values besides the base RTT and,
 		 * rarely, the MSS do not change at runtime in the calculation of beta.
 		 */
-		int new_beta =
+		unsigned long new_beta =
 			BITS_TO_BYTES(beta_scale /* * MEGA */ * ca->host_bw *
 				      base_rtt_us / expected_flows) /
 			tp->mss_cache /* / USEC_PER_SEC */;
@@ -248,7 +252,7 @@ static void update_beta(struct sock *sk, long base_rtt_us)
 }
 
 /* Update the list of recent snd_cwnds. */
-static bool update_old(struct sock *sk, long p_smooth)
+static bool update_old(struct sock *sk, unsigned long p_smooth)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -268,56 +272,61 @@ static bool update_old(struct sock *sk, long p_smooth)
 	return true;
 }
 
-static __u32 update_window(struct sock *sk, __u32 cwnd_old, long norm_power)
+static __u32 update_window(struct sock *sk, __u32 cwnd_old,
+			   unsigned long norm_power)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	__u32 cwnd;
 
-	norm_power = max(norm_power, 1L);
+	norm_power = max(norm_power, 1UL);
 	cwnd = ((gamma *
 		 (beta_scale * power_scale * cwnd_old / norm_power + ca->beta) /
-		 (unsigned long)beta_scale) +
+		 beta_scale) +
 		(gamma_scale - gamma) * tp->snd_cwnd) /
-	       (unsigned long)gamma_scale;
+	       gamma_scale;
 	cwnd = max(1U, cwnd);
 	set_cwnd(tp, cwnd);
 	return cwnd;
 }
 
-static long rttptcp_norm_power(const struct sock *sk,
-			       const struct rate_sample *rs, long base_rtt_us)
+static unsigned long rttptcp_norm_power(const struct sock *sk,
+					const struct rate_sample *rs,
+					unsigned long base_rtt_us)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
-	long dt, rtt_grad, p_norm, delta_t;
-	long p_smooth = ca->p_smooth;
-	long rtt_us;
+	unsigned long dt, rtt_grad, p_norm, delta_t;
+	unsigned long p_smooth = ca->p_smooth;
+	unsigned long rtt_us;
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
-		return p_smooth > -1 ? p_smooth : power_scale;
+		return p_smooth > 0 ? p_smooth : power_scale;
 	}
 
 	rtt_us = get_rtt(sk, rs);
-	dt = max_t(long, 1L,
-		   tcp_stamp_us_delta(tp->tcp_mstamp, ca->rttptcp.t_prev));
+	/* Timestamps are always increasing here, logically. So we want to have
+	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
+	 */
+	dt = tp->tcp_mstamp - ca->rttptcp.t_prev;
+	dt = max(dt, 1UL);
 	delta_t = min(dt, base_rtt_us);
-	rtt_grad = max(power_scale * (rtt_us - ca->rttptcp.prev_rtt_us) /
-			       (unsigned long)dt,
-		       0UL);
-	p_norm = (rtt_grad + power_scale) * rtt_us / (unsigned long)base_rtt_us;
+	/* Limiting rtt_grad to non-negative values. */
+	rtt_grad = power_scale *
+		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
+	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
 	p_smooth = smooth_power(p_smooth, p_norm, base_rtt_us, delta_t);
 
 	return p_smooth;
 }
 
 static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
-			  long base_rtt_us)
+			  unsigned long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (base_rtt_us == -1L) {
+	if (base_rtt_us == 0) {
 		base_rtt_us = get_base_rtt(sk, NULL);
 	}
 
@@ -335,7 +344,7 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
-			       long p_smooth)
+			       unsigned long p_smooth)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -355,7 +364,7 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 }
 
 static __u32 rttptcp_update_window(struct sock *sk, __u32 cwnd_old,
-				   long norm_power)
+				   unsigned long norm_power)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -377,7 +386,7 @@ void BPF_PROG(powertcp_cwnd_event, struct sock *sk, enum tcp_ca_event ev)
 	}
 
 	if (ev == CA_EVENT_TX_START) {
-		rttptcp_reset(sk, ev, -1);
+		rttptcp_reset(sk, ev, 0);
 	}
 }
 
@@ -391,13 +400,13 @@ void BPF_PROG(powertcp_init, struct sock *sk)
 		sizeof(((struct inet_connection_sock *)NULL)->icsk_ca_priv));
 
 	if (beta < 0) {
-		ca->beta = INT_MAX;
+		ca->beta = ULONG_MAX;
 	} else {
 		ca->beta = beta;
 	}
 	ca->host_bw = get_host_bw(sk);
 
-	rttptcp_reset(sk, CA_EVENT_CWND_RESTART, -1);
+	rttptcp_reset(sk, CA_EVENT_CWND_RESTART, 0);
 
 #if HAVE_WRITABLE_SK_PACING
 	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
@@ -435,10 +444,10 @@ void BPF_PROG(powertcp_cong_control, struct sock *sk,
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	__u32 cwnd_old;
-	long norm_power;
+	unsigned long norm_power;
 	__u32 cwnd;
 	unsigned long rate;
-	long base_rtt_us;
+	unsigned long base_rtt_us;
 
 	if (ca->host_bw == 0) {
 		return;
@@ -450,8 +459,7 @@ void BPF_PROG(powertcp_cong_control, struct sock *sk,
 	cwnd_old = get_cwnd(sk);
 	norm_power = rttptcp_norm_power(sk, rs, base_rtt_us);
 	cwnd = rttptcp_update_window(sk, cwnd_old, norm_power);
-	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) /
-	       (unsigned long)base_rtt_us;
+	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us;
 	set_rate(sk, rate);
 	rttptcp_update_old(sk, rs, norm_power);
 }
