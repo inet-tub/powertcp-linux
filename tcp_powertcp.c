@@ -36,7 +36,7 @@ enum powertcp_variant {
 
 struct old_cwnd {
 	u32 snd_nxt;
-	u32 cwnd;
+	unsigned long cwnd;
 	struct list_head list;
 };
 
@@ -48,11 +48,11 @@ struct powertcp_ops {
 		      unsigned long base_rtt_us);
 	bool (*update_old)(struct sock *sk, const struct rate_sample *rs,
 			   unsigned long p_smooth);
-	u32 (*update_window)(struct sock *sk, u32 cwnd_old,
-			     unsigned long norm_power);
+	unsigned long (*update_window)(struct sock *sk, unsigned long cwnd_old,
+				       unsigned long norm_power);
 };
 
-const unsigned long beta_scale = (1UL << 10);
+static const unsigned long cwnd_scale = (1UL << 10);
 static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const unsigned long gamma_scale = (1UL << 10);
 static const unsigned long power_scale = (1UL << 16);
@@ -122,7 +122,7 @@ static void clear_old_cwnds(struct sock *sk)
 /* Return the snd_cwnd that was set when the newly acknowledged segment(s) were
  * sent.
  */
-static u32 get_cwnd(const struct sock *sk)
+static unsigned long get_cwnd(const struct sock *sk)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -130,7 +130,7 @@ static u32 get_cwnd(const struct sock *sk)
 	/* Use the current cwnd initially or if looking for this ack_seq comes up
 	 * empty:
 	 */
-	u32 cwnd_old = tp->snd_cwnd;
+	unsigned long cwnd_old = ca->snd_cwnd;
 	u32 ack_seq = tp->snd_una;
 
 	struct old_cwnd *old_cwnd;
@@ -184,9 +184,15 @@ static unsigned long get_rtt(const struct sock *sk,
 	return rtt;
 }
 
-static void set_cwnd(struct tcp_sock *tp, u32 cwnd)
+static void set_cwnd(struct sock *sk, unsigned long cwnd)
 {
-	tp->snd_cwnd = min(cwnd, tp->snd_cwnd_clamp);
+	struct powertcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	ca->snd_cwnd = cwnd;
+	cwnd /= cwnd_scale;
+	cwnd = min_t(unsigned long, cwnd, tp->snd_cwnd_clamp);
+	tp->snd_cwnd = max(1UL, cwnd);
 }
 
 /* Set the socket pacing rate (bytes per second). */
@@ -200,7 +206,7 @@ static void reset(struct sock *sk, enum tcp_ca_event ev,
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	u32 cwnd;
+	unsigned long cwnd;
 	unsigned long rate;
 
 	/* Only reset those values on a CA_EVENT_CWND_RESTART (used on
@@ -214,8 +220,9 @@ static void reset(struct sock *sk, enum tcp_ca_event ev,
 
 		rate = BITS_TO_BYTES(MEGA * ca->host_bw);
 		set_rate(sk, rate);
-		cwnd = rate * base_rtt_us / tp->mss_cache / USEC_PER_SEC;
-		set_cwnd(tp, cwnd);
+		cwnd = cwnd_scale * rate * base_rtt_us / tp->mss_cache /
+		       USEC_PER_SEC;
+		set_cwnd(sk, cwnd);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
 		ca->p_smooth = 0;
@@ -252,7 +259,7 @@ static void update_beta(struct sock *sk, unsigned long base_rtt_us)
 		 * rarely, the MSS do not change at runtime in the calculation of beta.
 		 */
 		unsigned long new_beta =
-			BITS_TO_BYTES(beta_scale /* * MEGA */ * ca->host_bw *
+			BITS_TO_BYTES(cwnd_scale /* * MEGA */ * ca->host_bw *
 				      base_rtt_us / expected_flows) /
 			tp->mss_cache /* / USEC_PER_SEC */;
 		ca->beta = min(ca->beta, new_beta);
@@ -266,7 +273,7 @@ static bool update_old(struct sock *sk, unsigned long p_smooth)
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	u32 ack_seq = tp->snd_una;
-	u32 cwnd = tp->snd_cwnd;
+	unsigned long cwnd = ca->snd_cwnd;
 	u32 snd_nxt = tp->snd_nxt;
 
 	struct old_cwnd *n;
@@ -311,22 +318,19 @@ static bool update_old(struct sock *sk, unsigned long p_smooth)
 	return true;
 }
 
-static u32 update_window(struct sock *sk, u32 cwnd_old,
-			 unsigned long norm_power)
+static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
+				   unsigned long norm_power)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
-	struct tcp_sock *tp = tcp_sk(sk);
-	u32 cwnd;
+	unsigned long cwnd;
 
 	norm_power = max(norm_power, 1UL);
-	cwnd = ((gamma *
-		 (beta_scale * power_scale * cwnd_old / norm_power + ca->beta) /
-		 beta_scale) +
-		(gamma_scale - gamma) * tp->snd_cwnd) /
+	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
+		(gamma_scale - gamma) * ca->snd_cwnd) /
 	       gamma_scale;
-	cwnd = max(1U, cwnd);
+	cwnd = max(1UL, cwnd);
 	trace_update_window(sk, cwnd_old, power_scale, norm_power, cwnd);
-	set_cwnd(tp, cwnd);
+	set_cwnd(sk, cwnd);
 	return cwnd;
 }
 
@@ -419,14 +423,15 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	return true;
 }
 
-static u32 rttptcp_update_window(struct sock *sk, u32 cwnd_old,
-				 unsigned long norm_power)
+static unsigned long rttptcp_update_window(struct sock *sk,
+					   unsigned long cwnd_old,
+					   unsigned long norm_power)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
-		return tp->snd_cwnd;
+		return ca->snd_cwnd;
 	}
 
 	return update_window(sk, cwnd_old, norm_power);
@@ -493,9 +498,9 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
-	u32 cwnd_old;
+	unsigned long cwnd_old;
 	unsigned long norm_power;
-	u32 cwnd;
+	unsigned long cwnd;
 	unsigned long rate;
 	unsigned long base_rtt_us;
 	bool updated;
@@ -510,7 +515,7 @@ static void powertcp_cong_control(struct sock *sk, const struct rate_sample *rs)
 	cwnd_old = get_cwnd(sk);
 	norm_power = ca->ops->norm_power(sk, rs, base_rtt_us);
 	cwnd = ca->ops->update_window(sk, cwnd_old, norm_power);
-	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us;
+	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us / cwnd_scale;
 	set_rate(sk, rate);
 	updated = ca->ops->update_old(sk, rs, norm_power);
 

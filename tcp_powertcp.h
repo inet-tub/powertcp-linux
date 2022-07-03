@@ -11,7 +11,7 @@
 struct powertcp_ops;
 
 struct powertcp {
-	// TODO: Sort members in a cache-friendly way if necessary.
+	unsigned long snd_cwnd;
 
 	union {
 		struct {
