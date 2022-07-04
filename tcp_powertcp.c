@@ -52,11 +52,6 @@ struct powertcp_ops {
 				       unsigned long norm_power);
 };
 
-static const unsigned long cwnd_scale = (1UL << 10);
-static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
-static const unsigned long gamma_scale = (1UL << 10);
-static const unsigned long power_scale = (1UL << 16);
-
 static int base_rtt __read_mostly = -1;
 static int beta __read_mostly = -1;
 static int expected_flows __read_mostly = 10;
@@ -323,7 +318,7 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 		    power_scale * cwnd_old / norm_power + ca->beta,
 		    ca->snd_cwnd);
 	cwnd = max(1UL, cwnd);
-	trace_update_window(sk, cwnd_old, power_scale, norm_power, cwnd);
+	trace_update_window(sk, cwnd_old, norm_power, cwnd);
 	set_cwnd(sk, cwnd);
 	return cwnd;
 }
@@ -372,8 +367,8 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	p_smooth = p_smooth == 0 ? p_norm :
 					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
 
-	trace_norm_power(sk, dt, delta_t, rtt_us, rtt_grad, base_rtt_us,
-			 power_scale, p_norm, p_smooth);
+	trace_norm_power(sk, dt, delta_t, rtt_us, rtt_grad, base_rtt_us, p_norm,
+			 p_smooth);
 
 	return p_smooth;
 }
