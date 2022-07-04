@@ -19,22 +19,23 @@ TRACE_EVENT(new_ack,
 		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(u32, ack_seq)
-		__field(u32, cwnd)
+		__field(unsigned long, cwnd)
 		__field(unsigned long, rate)
 	),
 	TP_fast_assign(
+		const struct powertcp *ca = inet_csk_ca(sk);
 		const struct tcp_sock *tp = tcp_sk(sk);
 
 		__entry->time = tp->tcp_mstamp;
 		__entry->hash = sk->sk_hash;
 		__entry->ack_seq = tp->snd_una;
-		__entry->cwnd = tp->snd_cwnd;
+		__entry->cwnd = ca->snd_cwnd;
 		__entry->rate = sk->sk_pacing_rate;
 	),
 	TP_printk(
-		"time=%llu us hash=%u ack_seq=%u: cwnd=%u rate=%lu bytes/s (~%lu Mbit/s)",
-		__entry->time, __entry->hash, __entry->ack_seq, __entry->cwnd,
-		__entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
+		"time=%llu us hash=%u ack_seq=%u: cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
+		__entry->time, __entry->hash, __entry->ack_seq, cwnd_scale,
+		__entry->cwnd, __entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
 );
 
 TRACE_EVENT(norm_power,
@@ -74,15 +75,15 @@ TRACE_EVENT(norm_power,
 )
 
 TRACE_EVENT(reset,
-	TP_PROTO(u64 time, unsigned int hash, enum tcp_ca_event ev, unsigned long base_rtt,
-		u32 cwnd, unsigned long rate),
+	TP_PROTO(u64 time, unsigned int hash, enum tcp_ca_event ev,
+		unsigned long base_rtt, unsigned long cwnd, unsigned long rate),
 	TP_ARGS(time, hash, ev, base_rtt, cwnd, rate),
 	TP_STRUCT__entry(
 		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(enum tcp_ca_event, ev)
 		__field(unsigned long, base_rtt)
-		__field(u32, cwnd)
+		__field(unsigned long, cwnd)
 		__field(unsigned long, rate)
 	),
 	TP_fast_assign(
@@ -94,23 +95,24 @@ TRACE_EVENT(reset,
 		__entry->rate = rate;
 	),
 	TP_printk(
-		"time=%llu us hash=%u: ev=%d base_rtt=%lu cwnd=%u rate=%lu bytes/s (~%lu Mbit/s)",
+		"time=%llu us hash=%u: ev=%d base_rtt=%lu cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
 		__entry->time, __entry->hash, __entry->ev, __entry->base_rtt,
-		__entry->cwnd, __entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
+		cwnd_scale, __entry->cwnd, __entry->rate,
+		BITS_PER_BYTE * __entry->rate / MEGA)
 );
 
 TRACE_EVENT(update_window,
-	TP_PROTO(const struct sock *sk, u32 cwnd_old,  unsigned long p_norm,
-		u32 cwnd),
+	TP_PROTO(const struct sock *sk, unsigned long cwnd_old,
+		unsigned long p_norm, unsigned long cwnd),
 	TP_ARGS(sk, cwnd_old, p_norm, cwnd),
 	TP_STRUCT__entry(
 		__field(u64, time)
 		__field(unsigned int, hash)
-		__field(u32, cwnd_old)
-		__field(u32, snd_cwnd)
+		__field(unsigned long, cwnd_old)
+		__field(unsigned long, snd_cwnd)
 		__field(unsigned long, p_norm)
 		__field(unsigned long, beta)
-		__field(u32, cwnd)
+		__field(unsigned long, cwnd)
 	),
 	TP_fast_assign(
 		const struct powertcp *ca = inet_csk_ca(sk);
@@ -125,9 +127,10 @@ TRACE_EVENT(update_window,
 		__entry->cwnd = cwnd;
 	),
 	TP_printk(
-		"time=%llu us hash=%u: cwnd_old=%u cwnd=%u p_norm*%lu=%lu  beta=%lu => cwnd=%u",
-		__entry->time, __entry->hash, __entry->cwnd_old, __entry->snd_cwnd,
-		power_scale, __entry->p_norm, __entry->beta, __entry->cwnd)
+		"time=%llu us hash=%u: cwnd_old*%lu=%lu cwnd*%lu=%lu p_norm*%lu=%lu  beta=%lu => cwnd*%lu=%lu",
+		__entry->time, __entry->hash, cwnd_scale, __entry->cwnd_old, cwnd_scale,
+		__entry->snd_cwnd, power_scale, __entry->p_norm, __entry->beta,
+		cwnd_scale, __entry->cwnd)
 );
 // clang-format on
 
