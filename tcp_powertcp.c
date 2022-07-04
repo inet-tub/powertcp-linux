@@ -119,6 +119,13 @@ static void clear_old_cwnds(struct sock *sk)
 	}
 }
 
+static unsigned long ewma(unsigned long weight, unsigned long weight_scale,
+			  unsigned long value, unsigned long old_value)
+{
+	return (weight * value + (weight_scale - weight) * old_value) /
+	       weight_scale;
+}
+
 /* Return the snd_cwnd that was set when the newly acknowledged segment(s) were
  * sent.
  */
@@ -234,19 +241,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev,
 		    sk->sk_pacing_rate);
 }
 
-static unsigned long smooth_power(unsigned long p_smooth, unsigned long p_norm,
-				  unsigned long base_rtt_us,
-				  unsigned long delta_t)
-{
-	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
-	 * very first calculation.
-	 */
-	return p_smooth == 0 ? p_norm :
-				     (p_smooth * (base_rtt_us - delta_t) +
-				(p_norm * delta_t)) /
-				       base_rtt_us;
-}
-
 static void update_beta(struct sock *sk, unsigned long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -325,9 +319,9 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 	unsigned long cwnd;
 
 	norm_power = max(norm_power, 1UL);
-	cwnd = (gamma * (power_scale * cwnd_old / norm_power + ca->beta) +
-		(gamma_scale - gamma) * ca->snd_cwnd) /
-	       gamma_scale;
+	cwnd = ewma(gamma, gamma_scale,
+		    power_scale * cwnd_old / norm_power + ca->beta,
+		    ca->snd_cwnd);
 	cwnd = max(1UL, cwnd);
 	trace_update_window(sk, cwnd_old, power_scale, norm_power, cwnd);
 	set_cwnd(sk, cwnd);
@@ -372,7 +366,11 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	rtt_grad = power_scale *
 		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
 	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
-	p_smooth = smooth_power(p_smooth, p_norm, base_rtt_us, delta_t);
+	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
+	 * very first calculation.
+	 */
+	p_smooth = p_smooth == 0 ? p_norm :
+					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
 
 	trace_norm_power(sk, dt, delta_t, rtt_us, rtt_grad, base_rtt_us,
 			 power_scale, p_norm, p_smooth);
