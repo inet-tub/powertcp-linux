@@ -2,10 +2,11 @@ BPFTOOL ?= /usr/sbin/bpftool
 CLANG ?= clang
 LLVM_STRIP ?= llvm-strip
 VMLINUX ?= /sys/kernel/btf/vmlinux
+TCP_INT_DIR ?= tcp-int/code
 
 HAVE_WRITABLE_SK_PACING ?= 0
 
-BPF_OBJS := rtt_powertcp.bpf.o
+BPF_OBJS := powertcp.bpf.o rtt_powertcp.bpf.o
 BPF_DEPS := $(BPF_OBJS:.o=.d)
 VMLINUX_H := vmlinux.h
 
@@ -20,8 +21,9 @@ ARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 
 CFLAGS += -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 		  $(shell pkg-config --cflags libbpf) -c -O2 \
-		  -mcpu=probe -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING)
-DEP_CFLAGS := -M -MG
+		  -mcpu=probe -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING) \
+		  -I$(TCP_INT_DIR)/include
+DEP_CFLAGS := -M -MG -I$(TCP_INT_DIR)/include
 
 .PHONY: all
 all: $(BPF_OBJS)
