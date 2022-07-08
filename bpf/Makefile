@@ -27,7 +27,7 @@ all: $(BPF_OBJS)
 
 .PHONY: clean
 clean:
-	$(RM) -r -- $(BPF_DEPS) $(BPF_OBJS) $(VMLINUX_H)
+	$(RM) $(BPF_DEPS) $(BPF_OBJS) $(VMLINUX_H)
 
 $(VMLINUX_H): $(VMLINUX)
 	$(BPFTOOL) btf dump file $< format c > $@
