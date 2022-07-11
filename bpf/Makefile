@@ -18,9 +18,10 @@ ARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
     -e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ \
     -e s/riscv.*/riscv/)
 
-CFLAGS += -g -target bpf -MD -D__TARGET_ARCH_$(ARCH) \
+CFLAGS += -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 		  $(shell pkg-config --cflags libbpf) -c -O2 \
 		  -mcpu=probe -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING)
+DEP_CFLAGS := -M -MG
 
 .PHONY: all
 all: $(BPF_OBJS)
@@ -32,8 +33,13 @@ clean:
 $(VMLINUX_H): $(VMLINUX)
 	$(BPFTOOL) btf dump file $< format c > $@
 
-%.bpf.o: %.bpf.c $(VMLINUX_H)
+%.bpf.o: %.bpf.c
 	$(CLANG) $(CFLAGS) $< -o $@
 	$(LLVM_STRIP) -g $@
 
+$(BPF_DEPS): %.d: %.c
+	$(CC) $(DEP_CFLAGS) $< -MF $@
+
+ifneq ($(MAKECMDGOALS),clean)
 -include $(BPF_DEPS)
+endif
