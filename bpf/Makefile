@@ -6,7 +6,7 @@ TCP_INT_DIR ?= tcp-int/code
 
 HAVE_WRITABLE_SK_PACING ?= 0
 
-BPF_OBJS := powertcp.bpf.o rtt_powertcp.bpf.o
+BPF_OBJS := powertcp.bpf.o
 BPF_DEPS := $(BPF_OBJS:.o=.d)
 BPF_SKELS := $(BPF_OBJS:.bpf.o=.skel.h)
 PROGS := powertcp

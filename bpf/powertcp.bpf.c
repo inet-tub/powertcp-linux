@@ -60,10 +60,17 @@ struct powertcp_int {
 struct powertcp {
 	unsigned long snd_cwnd;
 
-	struct {
-		struct powertcp_int cached_int;
-		struct powertcp_int prev_int;
-	} ptcp;
+	union {
+		struct {
+			struct powertcp_int cached_int;
+			struct powertcp_int prev_int;
+		} ptcp;
+		struct {
+			__u32 last_updated;
+			unsigned long prev_rtt_us;
+			__u64 t_prev;
+		} rttptcp;
+	};
 
 	unsigned long beta;
 
@@ -246,6 +253,24 @@ static unsigned long get_rtt(const struct sock *sk,
 		rtt = tp->srtt_us >> 3;
 	}
 	return rtt;
+}
+
+static void require_pacing(struct sock *sk)
+{
+#if HAVE_WRITABLE_SK_PACING
+	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
+	 * a BPF TCP CC. */
+	/* We do want sk_pacing_rate to be respected: */
+#if __clang_major__ >= 12
+	// cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
+	__sync_bool_compare_and_swap(&sk->sk_pacing_status, SK_PACING_NONE,
+				     SK_PACING_NEEDED);
+#else
+	if (sk->sk_pacing_status == SK_PACING_NONE) {
+		sk->sk_pacing_status = SK_PACING_NEEDED;
+	}
+#endif
+#endif
 }
 
 static void set_cwnd(struct sock *sk, unsigned long cwnd)
@@ -439,92 +464,187 @@ static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	return update_old(sk, p_smooth);
 }
 
-SEC("struct_ops/powertcp_cwnd_event")
-void BPF_PROG(powertcp_cwnd_event, struct sock *sk, enum tcp_ca_event ev)
+static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
+					unsigned long norm_power)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
-
-	if (ca->host_bw == 0) {
-		return;
-	}
-
-	if (ev == CA_EVENT_TX_START) {
-		ptcp_reset(sk, ev, 0);
-	}
+	return update_window(sk, cwnd_old, norm_power);
 }
 
-SEC("struct_ops/powertcp_init")
-void BPF_PROG(powertcp_init, struct sock *sk)
+static unsigned long rttptcp_norm_power(const struct sock *sk,
+					const struct rate_sample *rs,
+					unsigned long base_rtt_us)
+{
+	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+	unsigned long dt, rtt_grad, p_norm, delta_t;
+	unsigned long p_smooth = ca->p_smooth;
+	unsigned long rtt_us;
+
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return p_smooth > 0 ? p_smooth : power_scale;
+	}
+
+	rtt_us = get_rtt(sk, rs);
+	/* Timestamps are always increasing here, logically. So we want to have
+	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
+	 */
+	dt = tp->tcp_mstamp - ca->rttptcp.t_prev;
+	dt = max(dt, 1UL);
+	delta_t = min(dt, base_rtt_us);
+	/* Limiting rtt_grad to non-negative values. */
+	rtt_grad = power_scale *
+		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
+	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
+	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
+	 * very first calculation.
+	 */
+	p_smooth = p_smooth == 0 ? p_norm :
+					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
+
+	return p_smooth;
+}
+
+static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
+			  unsigned long base_rtt_us)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
 
-	BUILD_BUG_ON(
-		sizeof(struct powertcp) >
-		sizeof(((struct inet_connection_sock *)NULL)->icsk_ca_priv));
-
-	if (beta < 0) {
-		ca->beta = ULONG_MAX;
-	} else {
-		ca->beta = beta;
+	if (base_rtt_us == 0) {
+		base_rtt_us = get_base_rtt(sk, NULL);
 	}
-	ca->host_bw = get_host_bw(sk);
 
-	ptcp_reset(sk, CA_EVENT_CWND_RESTART, 0);
-
-#if HAVE_WRITABLE_SK_PACING
-	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
-	 * a BPF TCP CC. */
-	/* We do want sk_pacing_rate to be respected: */
-#if __clang_major__ >= 12
-	//cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
-	__sync_bool_compare_and_swap(&sk->sk_pacing_status, SK_PACING_NONE,
-				     SK_PACING_NEEDED);
-#else
-	if (sk->sk_pacing_status == SK_PACING_NONE) {
-		sk->sk_pacing_status = SK_PACING_NEEDED;
+	/* Only reset those on initialization. */
+	if (ev == CA_EVENT_CWND_RESTART) {
+		// TODO: Evaluate if it actually improves performance of the algorithm
+		// to reset those two values only on CA_EVENT_CWND_RESTART:
+		ca->rttptcp.last_updated = tp->snd_nxt;
+		ca->rttptcp.prev_rtt_us = tp->srtt_us >> 3;
 	}
-#endif
-#endif
+
+	ca->rttptcp.t_prev = tp->tcp_mstamp;
+
+	reset(sk, ev, base_rtt_us);
 }
+
+static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
+			       unsigned long p_smooth)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return false;
+	}
+
+	update_old(sk, p_smooth);
+
+	ca->rttptcp.last_updated = tp->snd_nxt;
+	ca->rttptcp.prev_rtt_us = get_rtt(sk, rs);
+	// TODO: There are multiple timestamps available here. Is there a better one?
+	ca->rttptcp.t_prev = tp->tcp_mstamp;
+
+	return true;
+}
+
+static unsigned long rttptcp_update_window(struct sock *sk,
+					   unsigned long cwnd_old,
+					   unsigned long norm_power)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+		return ca->snd_cwnd;
+	}
+
+	return update_window(sk, cwnd_old, norm_power);
+}
+
+#define DEFINE_POWERTCP_VARIANT(func_prefix, cong_ops_name)                    \
+	SEC("struct_ops/powertcp_##func_prefix##_cwnd_event")                  \
+	void BPF_PROG(powertcp_##func_prefix##_cwnd_event, struct sock *sk,    \
+		      enum tcp_ca_event ev)                                    \
+	{                                                                      \
+		struct powertcp *ca = inet_csk_ca(sk);                         \
+                                                                               \
+		if (ca->host_bw == 0) {                                        \
+			return;                                                \
+		}                                                              \
+                                                                               \
+		if (ev == CA_EVENT_TX_START) {                                 \
+			func_prefix##_reset(sk, ev, 0);                        \
+		}                                                              \
+	}                                                                      \
+                                                                               \
+	SEC("struct_ops/powertcp_##func_prefix##_init")                        \
+	void BPF_PROG(powertcp_##func_prefix##_init, struct sock *sk)          \
+	{                                                                      \
+		struct powertcp *ca = inet_csk_ca(sk);                         \
+                                                                               \
+		BUILD_BUG_ON(sizeof(struct powertcp) >                         \
+			     sizeof(((struct inet_connection_sock *)NULL)      \
+					    ->icsk_ca_priv));                  \
+                                                                               \
+		if (beta < 0) {                                                \
+			ca->beta = ULONG_MAX;                                  \
+		} else {                                                       \
+			ca->beta = beta;                                       \
+		}                                                              \
+		ca->host_bw = get_host_bw(sk);                                 \
+                                                                               \
+		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART, 0);             \
+                                                                               \
+		require_pacing(sk);                                            \
+	}                                                                      \
+                                                                               \
+	SEC("struct_ops/powertcp_##func_prefix##_cong_control")                \
+	void BPF_PROG(powertcp_##func_prefix##_cong_control, struct sock *sk,  \
+		      const struct rate_sample *rs)                            \
+	{                                                                      \
+		struct powertcp *ca = inet_csk_ca(sk);                         \
+		const struct tcp_sock *tp = tcp_sk(sk);                        \
+		unsigned long cwnd_old;                                        \
+		unsigned long norm_power;                                      \
+		unsigned long cwnd;                                            \
+		unsigned long rate;                                            \
+		unsigned long base_rtt_us;                                     \
+                                                                               \
+		if (ca->host_bw == 0) {                                        \
+			return;                                                \
+		}                                                              \
+                                                                               \
+		base_rtt_us = get_base_rtt(sk, rs);                            \
+		update_beta(sk, base_rtt_us);                                  \
+                                                                               \
+		cwnd_old = get_cwnd(sk);                                       \
+		norm_power = func_prefix##_norm_power(sk, rs, base_rtt_us);    \
+		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power);  \
+		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us /   \
+		       cwnd_scale;                                             \
+		set_rate(sk, rate);                                            \
+		func_prefix##_update_old(sk, rs, norm_power);                  \
+	}                                                                      \
+                                                                               \
+	SEC(".struct_ops")                                                     \
+	struct tcp_congestion_ops cong_ops_name = {                            \
+		.cong_avoid = (void *)powertcp_cong_avoid,                     \
+		.cong_control = (void *)powertcp_##func_prefix##_cong_control, \
+		.cwnd_event = (void *)powertcp_##func_prefix##_cwnd_event,     \
+		.init = (void *)powertcp_##func_prefix##_init,                 \
+		.name = "bpf_" #cong_ops_name,                                 \
+		.release = (void *)powertcp_release,                           \
+		.ssthresh = (void *)powertcp_ssthresh,                         \
+		.undo_cwnd = (void *)powertcp_undo_cwnd,                       \
+	}
 
 SEC("struct_ops/powertcp_cong_avoid")
 void BPF_PROG(powertcp_cong_avoid, struct sock *sk, __u32 ack, __u32 acked)
 {
 	/* tcp_congestion_ops.cong_avoid is unfortunately non-optional in
-	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is
-	 * also set. This might be an oversight.
+	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is also
+	 * set. This might be an oversight.
 	 */
-}
-
-SEC("struct_ops/powertcp_cong_control")
-void BPF_PROG(powertcp_cong_control, struct sock *sk,
-	      const struct rate_sample *rs)
-{
-	/* cong_control, if assigned in tcp_congestion_ops, becomes the main
-	 * congestion control function and is responsible for setting cwnd and rate.
-	*/
-
-	struct powertcp *ca = inet_csk_ca(sk);
-	const struct tcp_sock *tp = tcp_sk(sk);
-	unsigned long cwnd_old;
-	unsigned long norm_power;
-	unsigned long cwnd;
-	unsigned long rate;
-	unsigned long base_rtt_us;
-
-	if (ca->host_bw == 0) {
-		return;
-	}
-
-	base_rtt_us = get_base_rtt(sk, rs);
-	update_beta(sk, base_rtt_us);
-
-	cwnd_old = get_cwnd(sk);
-	norm_power = ptcp_norm_power(sk, rs, base_rtt_us);
-	cwnd = update_window(sk, cwnd_old, norm_power);
-	rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us / cwnd_scale;
-	set_rate(sk, rate);
-	ptcp_update_old(sk, rs, norm_power);
 }
 
 SEC("struct_ops/powertcp_release")
@@ -553,18 +673,12 @@ SEC("struct_ops/powertcp_undo_cwnd")
 __u32 BPF_PROG(powertcp_undo_cwnd, struct sock *sk)
 {
 	/* Never undo after a loss. */
-	// TODO: Or do we?
+	/* TODO: Or do we? */
 	return tcp_sk(sk)->snd_cwnd;
 }
 
-SEC(".struct_ops")
-struct tcp_congestion_ops powertcp = {
-	.cong_avoid = (void *)powertcp_cong_avoid,
-	.cong_control = (void *)powertcp_cong_control,
-	.cwnd_event = (void *)powertcp_cwnd_event,
-	.init = (void *)powertcp_init,
-	.name = "bpf_powertcp",
-	.release = (void *)powertcp_release,
-	.ssthresh = (void *)powertcp_ssthresh,
-	.undo_cwnd = (void *)powertcp_undo_cwnd,
-};
+DEFINE_POWERTCP_VARIANT(ptcp, powertcp);
+
+/* Cannot name it rtt_powertcp due to the size limit for
+ * tcp_congestion_ops.name. */
+DEFINE_POWERTCP_VARIANT(rttptcp, rttpowertcp);

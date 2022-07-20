@@ -17,6 +17,85 @@
 #include <string.h>
 #include <unistd.h>
 
+static int attach_struct_ops(struct bpf_map *struct_ops)
+{
+	struct bpf_link *link = bpf_map__attach_struct_ops(struct_ops);
+	if (libbpf_get_error(link)) {
+		fprintf(stderr, "attach_struct_ops(%s): %s\n",
+			bpf_map__name(struct_ops), strerror(errno));
+		return -1;
+	}
+
+	/* Have to __disconnect() before __destroy() so the attached struct_ops
+	 * outlive this userspace program.
+	 */
+	bpf_link__disconnect(link);
+	bpf_link__destroy(link);
+	return 0;
+}
+
+static int delete_struct_ops(const char *map_name)
+{
+	int r = 0;
+	int fd = -1;
+	__u32 id = 0;
+	struct bpf_map_info *info;
+	__u32 info_len = sizeof(*info);
+	const int zero = 0;
+
+	info = calloc(1, info_len);
+	if (!info) {
+		perror("calloc");
+		return -1;
+	}
+
+	while (true) {
+		if (bpf_map_get_next_id(id, &id)) {
+			if (errno != ENOENT) {
+				perror("map_get_next_id");
+				r = -1;
+			}
+			goto fail;
+		}
+
+		fd = bpf_map_get_fd_by_id(id);
+		if (fd < 0) {
+			if (errno == ENOENT) {
+				continue;
+			}
+			perror("map_get_fd_by_id");
+			r = -1;
+			goto fail;
+		}
+
+		if (bpf_obj_get_info_by_fd(fd, info, &info_len)) {
+			perror("obj_get_info_by_fd");
+			r = -1;
+			goto fail;
+		}
+
+		if (info->type == BPF_MAP_TYPE_STRUCT_OPS &&
+		    0 == strcmp(map_name, info->name)) {
+			break;
+		}
+
+		close(fd);
+		fd = -1;
+	}
+
+	if (bpf_map_delete_elem(fd, &zero)) {
+		perror("map_delete_elem");
+		r = -1;
+	}
+
+fail:
+	if (fd > -1) {
+		close(fd);
+	}
+	free(info);
+	return r;
+}
+
 static int do_register(void)
 {
 	int r = EXIT_SUCCESS;
@@ -58,23 +137,21 @@ static int do_register(void)
 		goto fail;
 	}
 
-	link = bpf_map__attach_struct_ops(skel->maps.powertcp);
-	if (libbpf_get_error(link)) {
-		perror("attach_struct_ops");
+	if (attach_struct_ops(skel->maps.powertcp)) {
 		r = EXIT_FAILURE;
 		goto fail;
 	}
 
-	/* Have to __disconnect() before __destroy() so the attached struct_ops
-	 * outlive this userspace program.
-	 */
-	bpf_link__disconnect(link);
+	if (attach_struct_ops(skel->maps.rttpowertcp)) {
+		r = EXIT_FAILURE;
+		goto fail;
+	}
 
 fail:
 	if (map_fd > -1) {
 		close(map_fd);
 	}
-	bpf_link__destroy(link); /* Save to call with an error value. */
+	bpf_link__destroy(link);
 	powertcp_bpf__destroy(skel);
 
 	return r;
@@ -83,62 +160,12 @@ fail:
 static int do_unregister(void)
 {
 	int r = EXIT_SUCCESS;
-	int fd = -1;
-	__u32 id = 0;
-	struct bpf_map_info *info;
-	__u32 info_len = sizeof(*info);
-	const int zero = 0;
-
-	info = calloc(1, info_len);
-	if (!info) {
-		perror("calloc");
-		return EXIT_FAILURE;
-	}
-
-	while (true) {
-		if (bpf_map_get_next_id(id, &id)) {
-			if (errno != ENOENT) {
-				perror("map_get_next_id");
-				r = EXIT_FAILURE;
-			}
-			goto fail;
-		}
-
-		fd = bpf_map_get_fd_by_id(id);
-		if (fd < 0) {
-			if (errno == ENOENT) {
-				continue;
-			}
-			perror("map_get_fd_by_id");
-			r = EXIT_FAILURE;
-			goto fail;
-		}
-
-		if (bpf_obj_get_info_by_fd(fd, info, &info_len)) {
-			perror("obj_get_info_by_fd");
-			r = EXIT_FAILURE;
-			goto fail;
-		}
-
-		if (info->type == BPF_MAP_TYPE_STRUCT_OPS &&
-		    0 == strcmp("powertcp", info->name)) {
-			break;
-		}
-
-		close(fd);
-		fd = -1;
-	}
-
-	if (bpf_map_delete_elem(fd, &zero)) {
-		perror("map_delete_elem");
+	if (delete_struct_ops("powertcp")) {
 		r = EXIT_FAILURE;
 	}
-
-fail:
-	if (fd > -1) {
-		close(fd);
+	if (delete_struct_ops("rttpowertcp")) {
+		r = EXIT_FAILURE;
 	}
-	free(info);
 	return r;
 }
 
