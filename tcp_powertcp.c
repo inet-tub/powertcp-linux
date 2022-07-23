@@ -35,11 +35,19 @@ struct old_cwnd {
 	struct list_head list;
 };
 
-struct powertcp_int {
-	u32 ts;
-	u32 qlen;
-	u32 tx_bytes;
+enum { max_n_hops = 1 };
+
+struct powertcp_hop_int {
 	u32 bandwidth;
+	u32 ts;
+	u32 tx_bytes;
+	u32 qlen;
+};
+
+struct powertcp_int {
+	int n_hop;
+	int path_id;
+	struct powertcp_hop_int hops[max_n_hops];
 };
 
 static int base_rtt __read_mostly = -1;
@@ -154,6 +162,17 @@ static unsigned long get_host_bw(struct sock *sk)
 	}
 
 	return bw;
+}
+
+static const struct powertcp_int *get_int(struct sock *sk,
+					  const struct powertcp_int *prev_int)
+{
+	return NULL;
+}
+
+static const struct powertcp_int *get_prev_int(struct sock *sk)
+{
+	return NULL;
 }
 
 /* Return the most recently measured RTT (in us). */
@@ -305,41 +324,54 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 	return cwnd;
 }
 
-static unsigned long ptcp_norm_power(const struct sock *sk,
+static unsigned long ptcp_norm_power(struct sock *sk,
 				     const struct rate_sample *rs,
 				     unsigned long base_rtt_us)
 {
+	const struct powertcp *ca = inet_csk_ca(sk);
 	unsigned long delta_t = 0;
 	unsigned long p_norm = 0;
-	unsigned long p_smooth;
+	unsigned long p_smooth = ca->p_smooth;
+
+	const struct powertcp_int *prev_int = get_prev_int(sk);
+	const struct powertcp_int *this_int = get_int(sk, prev_int);
+	int i;
+
+	/* TODO: Do something helpful (a full reset?) when the path changes. */
+	if (!this_int || !prev_int || this_int->path_id != prev_int->path_id) {
+		return p_smooth > 0 ? p_smooth : power_scale;
+	}
 
 	/* for each egress port i on the path */
-	for (;;) {
-		// TODO: Think about a way to manage the INT data.
-		const struct powertcp_int *hop_int = NULL;
-		const struct powertcp_int *prev_hop_int = NULL;
-		unsigned long dt =
-			hop_int->ts -
-			prev_hop_int->ts; /* ack.H[i].ts - prevInt[i].ts */
+	for (i = 0; i < this_int->n_hop && i < max_n_hops; ++i) {
+		const struct powertcp_hop_int *hop_int = &this_int->hops[i];
+		const struct powertcp_hop_int *prev_hop_int =
+			&prev_int->hops[i];
+		unsigned long dt = max(hop_int->ts - prev_hop_int->ts, 1u);
 		unsigned long queue_grad =
-			power_scale * (hop_int->qlen - prev_hop_int->qlen) /
-			dt; /* ack.H[i].qlen - prevInt[i].qlen */
+			hop_int->qlen > prev_hop_int->qlen ?
+				      power_scale * USEC_PER_SEC *
+					(hop_int->qlen - prev_hop_int->qlen) /
+					dt :
+				      0;
 		unsigned long rate =
-			power_scale *
-			(hop_int->tx_bytes - prev_hop_int->tx_bytes) /
-			dt; /* ack.H[i].txBytes - prevInt[i].txBytes */
+			power_scale * USEC_PER_SEC *
+			(hop_int->tx_bytes - prev_hop_int->tx_bytes) / dt;
 		/* The variable name "current" instead of lambda would conflict with a
 		 * macro of the same name in asm-generic/current.h.
 		 */
-		unsigned long lambda = queue_grad + rate;
+		unsigned long lambda = max(1ul, queue_grad + rate);
 		unsigned long bdp =
-			hop_int->bandwidth * base_rtt_us; /* ack.H[i].b */
-		unsigned long voltage =
-			USEC_PER_SEC * hop_int->qlen + bdp; /* ack.H[i].qlen */
+			hop_int->bandwidth * base_rtt_us / USEC_PER_SEC;
+		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
-		unsigned long equilibrium = hop_int->bandwidth *
-					    hop_int->bandwidth *
-					    base_rtt_us; /* ack.H[i].b */
+		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
+		 * interfaces:
+		 */
+		unsigned long equilibrium =
+			max(hop_int->bandwidth / USEC_PER_SEC *
+				    hop_int->bandwidth * base_rtt_us,
+			    1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm) {
 			p_norm = hop_p_norm;
@@ -348,9 +380,8 @@ static unsigned long ptcp_norm_power(const struct sock *sk,
 	}
 
 	delta_t = min(delta_t, base_rtt_us);
-	p_smooth = ewma(delta_t, base_rtt_us, p_norm, p_smooth);
-
-	trace_norm_power(sk, 0, delta_t, 0, 0, base_rtt_us, p_norm, p_smooth);
+	p_smooth = p_smooth == 0 ? p_norm :
+					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
 
 	return p_smooth;
 }
@@ -365,7 +396,9 @@ static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev,
 static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			    unsigned long p_smooth)
 {
-	return false;
+	/* TODO: Remember INT data for next calculation. */
+
+	return update_old(sk, p_smooth);
 }
 
 static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
