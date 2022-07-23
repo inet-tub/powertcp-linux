@@ -25,15 +25,7 @@
 
 char _license[] SEC("license") = "Dual MIT/GPL";
 
-#define MEGA 1000000UL
-#define TCP_INFINITE_SSTHRESH 0x7fffffff
 #define ULONG_MAX (-1UL)
-#define USEC_PER_SEC 1000000L
-
-#if !HAVE_WRITABLE_SK_PACING
-#define SO_MAX_PACING_RATE 47
-#define SOL_TCP 6
-#endif
 
 static const int max_n_hops = 1;
 

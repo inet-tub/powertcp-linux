@@ -12,8 +12,9 @@
 
 #include "vmlinux.h"
 
-#define INT_MAX 2147483647
 #define MEGA 1000000UL
+#define SO_MAX_PACING_RATE 47
+#define SOL_TCP 6
 #define TCP_INFINITE_SSTHRESH 0x7fffffff
 #define USEC_PER_SEC 1000000L
 
