@@ -13,7 +13,6 @@ static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
 static const unsigned long gamma_scale = (1UL << 10);
 static const unsigned long power_scale = (1UL << 16);
 
-struct powertcp_ops;
 
 struct powertcp {
 	unsigned long snd_cwnd;
@@ -29,13 +28,6 @@ struct powertcp {
 		} rttptcp;
 	};
 
-	/* powertcp_cong_control() seems to (unexpectedly) get called once before
-	 * powertcp_init(). ops is still NULL then, thanks to
-	 * tcp_assign_congestion_control(), and we use that as an indicator whether
-	 * we are initialized.
-	 */
-	const struct powertcp_ops *ops;
-
 	unsigned long beta;
 
 	// TODO: Investigate if this frequently updated list decreases performance
@@ -44,6 +36,11 @@ struct powertcp {
 
 	unsigned long p_smooth;
 
+	/* powertcp_cong_control() seems to (unexpectedly) get called once before
+	 * powertcp_init(). host_bw is still 0 then, thanks to
+	 * tcp_assign_congestion_control(), and we use that as an indicator whether
+	 * we are initialized.
+	 */
 	unsigned long host_bw; /* Mbit/s */
 };
 
