@@ -624,6 +624,7 @@ static int __init powertcp_register(void)
 static void __exit powertcp_unregister(void)
 {
 	tcp_unregister_congestion_control(&powertcp);
+	tcp_unregister_congestion_control(&rttpowertcp);
 }
 
 module_init(powertcp_register);
