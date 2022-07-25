@@ -87,6 +87,7 @@ const volatile int beta = -1;
 const volatile int expected_flows = 10;
 const volatile int gamma = 0.9 * gamma_scale;
 const volatile int hop_bw = 1000; /* Mbit/s */
+const volatile int host_bw = 1000; /* Mbit/s */
 
 /* Look for the base (~= minimum) RTT (in us). */
 static unsigned long get_base_rtt(const struct sock *sk,
@@ -152,7 +153,7 @@ static unsigned long get_cwnd(const struct sock *sk)
 /* Look for the host bandwidth (in Mbit/s). */
 static unsigned long get_host_bw(struct sock *sk)
 {
-	return fallback_host_bw;
+	return host_bw;
 #if 0
 	const struct dst_entry *dst = sk->sk_dst_cache;
 	unsigned long bw = fallback_host_bw;
