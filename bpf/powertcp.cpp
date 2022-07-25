@@ -33,7 +33,7 @@
 #include <utility>
 #include <variant>
 
-#include "powertcp.bpf.h"
+#include "powertcp_trace.h"
 
 namespace
 {
@@ -353,7 +353,7 @@ int handle_trace_event(void * /* ctx */, void *data, std::size_t /* data_sz */)
 	 */
 	std::printf(
 		"%20llu   %10u       %10u            %10lu   %10.8f      %10.8f            %10ld    %10u      %10u\n",
-		ev.time, ev.sk_hash, ev.cwnd, ev.rate * 8 / 1000000,
+		ev.time, ev.sock_hash, ev.cwnd, ev.rate * 8 / 1000000,
 		static_cast<double>(ev.p_norm) / power_scale,
 		static_cast<double>(ev.p_smooth) / power_scale, ev.qlen,
 		ev.delta_t, ev.tx_bytes_diff);
@@ -369,7 +369,7 @@ int handle_trace_event_csv(void * /* ctx */, void *data,
 	 */
 	const auto &ev = *static_cast<powertcp_trace_event *>(data);
 
-	std::printf("%llu,%u,%u,%lu,%0f,%0f,%ld,%u,%u\n", ev.time, ev.sk_hash,
+	std::printf("%llu,%u,%u,%lu,%0f,%0f,%ld,%u,%u\n", ev.time, ev.sock_hash,
 		    ev.cwnd, ev.rate,
 		    static_cast<double>(ev.p_norm) / power_scale,
 		    static_cast<double>(ev.p_smooth) / power_scale, ev.qlen,
