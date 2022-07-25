@@ -23,13 +23,8 @@ Disable stripping of the object files (for more human-readable `objdump`
 output) by appending `LLVM_STRIP=/bin/true` to the invokation of `make`.
 
 # Loading
-The compiled eBPF programs can be loaded into the kernel and registered for
-congestion control with `bpftool`:
+The compiled eBPF programs can be loaded into the kernel and registered as
+congestion control algorithms with the provided `powertcp` tool:
 ```console
-root@host:~# bpftool struct_ops register rtt_powertcp.bpf.o
-```
-
-Set the congestion control with:
-```console
-root@host:~# echo bpf_rttpowertcp > /proc/sys/net/ipv4/tcp_congestion_control
+root@host:PowerTCP-Kernel-Module/bpf# ./powertcp register
 ```
