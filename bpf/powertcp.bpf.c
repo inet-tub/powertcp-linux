@@ -76,10 +76,10 @@ struct powertcp {
 	unsigned long host_bw; /* Mbit/s */
 };
 
-const unsigned long cwnd_scale = (1UL << 10);
-const unsigned long fallback_host_bw = 1000; /* Mbit/s */
-const unsigned long gamma_scale = (1UL << 10);
-const unsigned long power_scale = (1UL << 16);
+static const unsigned long cwnd_scale = (1UL << 10);
+static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
+static const unsigned long gamma_scale = (1UL << 10);
+static const unsigned long power_scale = (1UL << 16);
 
 /* Configuration variables only settable before loading the BPF object: */
 const volatile int base_rtt = -1;
