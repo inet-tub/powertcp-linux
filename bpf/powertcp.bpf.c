@@ -247,6 +247,11 @@ static unsigned long get_rtt(const struct sock *sk,
 
 static void require_pacing(struct sock *sk)
 {
+	/* TODO: Once
+	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/
+	 * has arrived in a released kernel, we can replace the
+	 * HAVE_WRITABLE_SK_PACING flag with a look at the kernel version.
+	 */
 #if HAVE_WRITABLE_SK_PACING
 	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
 	 * a BPF TCP CC. */
@@ -277,6 +282,11 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd)
 /* Set the socket pacing rate (bytes per second). */
 static void set_rate(struct sock *sk, unsigned long rate)
 {
+	/* TODO: Once
+	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/
+	 * has arrived in a released kernel, we can replace the
+	 * HAVE_WRITABLE_SK_PACING flag with a look at the kernel version.
+	 */
 #if HAVE_WRITABLE_SK_PACING
 	/* TODO: May have to patch the kernel to be able to set sk_pacing_rate from
 	 * a BPF TCP CC. */
@@ -634,6 +644,10 @@ void BPF_PROG(powertcp_cong_avoid, struct sock *sk, __u32 ack, __u32 acked)
 	/* tcp_congestion_ops.cong_avoid is unfortunately non-optional in
 	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is also
 	 * set. This might be an oversight.
+	 */
+	/* NOTE: This stub is not needed for future kernel releases where
+	 * https://lore.kernel.org/all/20220622191227.898118-3-jthinz@mailbox.tu-berlin.de/
+	 * is included.
 	 */
 }
 
