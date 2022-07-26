@@ -25,6 +25,12 @@ static int attach_struct_ops(struct bpf_map *struct_ops)
 {
 	struct bpf_link *link = bpf_map__attach_struct_ops(struct_ops);
 	if (libbpf_get_error(link)) {
+		if (errno == EEXIST) {
+			fprintf(stderr, "%s is already registered, skipping\n",
+				bpf_map__name(struct_ops));
+			return 0;
+		}
+
 		fprintf(stderr, "attach_struct_ops(%s): %s\n",
 			bpf_map__name(struct_ops), strerror(errno));
 		return -1;
