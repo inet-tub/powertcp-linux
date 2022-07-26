@@ -11,9 +11,13 @@
 #include "tcp_int.h"
 
 #include <bpf/bpf.h>
+#include <bpf/libbpf.h>
 #include <errno.h>
+#include <linux/bpf.h>
+#include <linux/types.h>
+#include <stdbool.h>
 #include <stdio.h>
-#include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
