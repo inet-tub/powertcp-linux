@@ -14,6 +14,7 @@
  */
 
 #include "bpf_ca_helpers.h"
+#include "powertcp_defs.h"
 
 #include "vmlinux.h"
 
@@ -76,18 +77,13 @@ struct powertcp {
 	unsigned long host_bw; /* Mbit/s */
 };
 
-static const unsigned long cwnd_scale = (1UL << 10);
-static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
-static const unsigned long gamma_scale = (1UL << 10);
-static const unsigned long power_scale = (1UL << 16);
-
 /* Configuration variables only settable before loading the BPF object: */
-const volatile int base_rtt = -1;
-const volatile int beta = -1;
-const volatile int expected_flows = 10;
-const volatile int gamma = 0.9 * gamma_scale;
-const volatile int hop_bw = 1000; /* Mbit/s */
-const volatile int host_bw = 1000; /* Mbit/s */
+const volatile int base_rtt = default_base_rtt;
+const volatile int beta = default_beta;
+const volatile int expected_flows = default_expected_flows;
+const volatile int gamma = default_gamma;
+const volatile int hop_bw = default_hop_bw; /* Mbit/s */
+const volatile int host_bw = fallback_host_bw; /* Mbit/s */
 
 /* Look for the base (~= minimum) RTT (in us). */
 static unsigned long get_base_rtt(const struct sock *sk,

@@ -50,10 +50,10 @@ struct powertcp_int {
 	struct powertcp_hop_int hops[max_n_hops];
 };
 
-static int base_rtt __read_mostly = -1;
-static int beta __read_mostly = -1;
-static int expected_flows __read_mostly = 10;
-static int gamma __read_mostly = 0.9 * gamma_scale;
+static int base_rtt __read_mostly = default_base_rtt;
+static int beta __read_mostly = default_beta;
+static int expected_flows __read_mostly = default_expected_flows;
+static int gamma __read_mostly = default_gamma;
 
 module_param(base_rtt, int, 0444);
 MODULE_PARM_DESC(

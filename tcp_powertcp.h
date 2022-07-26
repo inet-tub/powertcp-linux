@@ -2,17 +2,13 @@
 #ifndef _TCP_POWERTCP_H
 #define _TCP_POWERTCP_H
 
+#include "powertcp_defs.h"
+
 #include <linux/list.h>
 
 #ifndef MEGA
 #define MEGA 1000000UL
 #endif
-
-static const unsigned long cwnd_scale = (1UL << 10);
-static const unsigned long fallback_host_bw = 1000; /* Mbit/s */
-static const unsigned long gamma_scale = (1UL << 10);
-static const unsigned long power_scale = (1UL << 16);
-
 
 struct powertcp {
 	unsigned long snd_cwnd;
