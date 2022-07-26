@@ -7,19 +7,100 @@
  *   Jörn-Thorben Hinz, TU Berlin, 2022.
  */
 #include "powertcp.skel.h"
+#include "powertcp_defs.h"
 
 #include "tcp_int.h"
 
+#include <assert.h>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <errno.h>
 #include <linux/bpf.h>
 #include <linux/types.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+struct powertcp_param {
+	const char *name;
+	char type;
+	size_t rodata_off;
+	double scale;
+};
+
+#define POWERTCP_RODATA_OFFSET(member)                                         \
+	offsetof(struct powertcp_bpf__rodata, member)
+/* The scale value is irrelevant for integer parameters. */
+static const struct powertcp_param params[] = {
+	{ "base_rtt", 'i', POWERTCP_RODATA_OFFSET(base_rtt), 1.0 },
+	{ "beta", 'f', POWERTCP_RODATA_OFFSET(beta), cwnd_scale },
+	{ "expected_flows", 'i', POWERTCP_RODATA_OFFSET(expected_flows), 1.0 },
+	{ "gamma", 'f', POWERTCP_RODATA_OFFSET(gamma), gamma_scale },
+	{ "hop_bw", 'i', POWERTCP_RODATA_OFFSET(hop_bw), 1.0 },
+	{ "host_bw", 'i', POWERTCP_RODATA_OFFSET(host_bw), 1.0 },
+	{ 0 }
+};
+#undef POWERTCP_RODATA_OFFSET
+
+static int parse_param(char *param_arg, struct powertcp_bpf__rodata *rodata)
+{
+	const char *tok = strtok(param_arg, "=");
+	if (!tok) {
+		tok = "";
+	}
+
+	const struct powertcp_param *param;
+	for (param = params; param->name; ++param) {
+		if (strcmp(tok, param->name) == 0) {
+			break;
+		}
+	}
+
+	if (!param->name) {
+		fprintf(stderr, "Unknown argument '%s'\n", tok);
+		return -1;
+	}
+
+	tok = strtok(NULL, "=");
+	if (!tok) {
+		tok = "";
+	}
+
+	char *end;
+	const char *reason;
+	double val;
+	errno = 0;
+	switch (param->type) {
+	case 'f':
+		reason = "Not a floating-point number";
+		val = strtod(tok, &end) * param->scale;
+		break;
+	case 'i':
+		reason = "Not an integer number";
+		val = strtol(tok, &end, 10);
+		break;
+	default:
+		assert(false);
+		return -1;
+	}
+
+	if (end == tok || *end != '\0' || errno != 0) {
+		fprintf(stderr, "Invalid value '%s' for parameter %s: %s\n",
+			tok, param->name,
+			errno != 0 ? strerror(errno) : reason);
+		return -1;
+	}
+
+	int *rodata_param = (void *)rodata + param->rodata_off;
+	/* TODO: Maybe check if a value is in the allowed range. Or do that in the
+	 * BPF code.
+	 */
+	*rodata_param = val;
+	return 0;
+}
 
 static int attach_struct_ops(struct bpf_map *struct_ops)
 {
@@ -106,7 +187,7 @@ fail:
 	return r;
 }
 
-static int do_register(void)
+static int do_register(int argc, char *argv[])
 {
 	int r = EXIT_SUCCESS;
 	struct powertcp_bpf *skel;
@@ -118,6 +199,13 @@ static int do_register(void)
 	if (!skel) {
 		perror("open");
 		return EXIT_FAILURE;
+	}
+
+	for (int i = 0; i < argc; ++i) {
+		if (parse_param(argv[i], skel->rodata)) {
+			r = EXIT_FAILURE;
+			goto fail;
+		}
 	}
 
 	map_fd = bpf_obj_get(TCP_INT_BPF_PIN_PATH "/map_tcp_int_state");
@@ -181,19 +269,41 @@ static int do_unregister(void)
 
 static void usage(const char *prog)
 {
-	fprintf(stderr, "Usage: %s register|unregister\n", prog);
+	fprintf(stderr,
+		"Usage: %1$s register|unregister [PARAMETER...]\n"
+		"\n"
+		"PARAMETERS\n"
+		"   The following parameters of the PowerTCP algorithm can be set with the\n"
+		"   register command:\n"
+		"    - base_rtt in µs\n"
+		"    - beta in number of packets\n"
+		"    - expected_flows\n"
+		"    - gamma\n"
+		"    - hop_bw in Mbit/s\n"
+		"    - host_bw in Mbit/s\n"
+		"\n"
+		"EXAMPLE\n"
+		"\n"
+		"   $ %1$s register expected_flows=1\n"
+		"\n",
+		prog);
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc != 2) {
+	if (argc < 2) {
 		usage(argv[0]);
 		return EXIT_FAILURE;
 	}
 
 	if (0 == strcmp("register", argv[1])) {
-		return do_register();
+		return do_register(argc - 2, argv + 2);
 	} else if (0 == strcmp("unregister", argv[1])) {
+		if (argc > 2) {
+			fprintf(stderr,
+				"unexpected argument(s) after 'unregister'\n");
+			return EXIT_FAILURE;
+		}
 		return do_unregister();
 	}
 
