@@ -28,7 +28,7 @@ char _license[] SEC("license") = "Dual MIT/GPL";
 
 #define ULONG_MAX (-1UL)
 
-static const int max_n_hops = 1;
+enum { max_n_hops = 1 };
 
 struct old_cwnd {
 	__u32 snd_nxt;
