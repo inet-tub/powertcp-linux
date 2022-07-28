@@ -94,7 +94,7 @@ static int parse_param(char *param_arg, struct powertcp_bpf__rodata *rodata)
 		return -1;
 	}
 
-	int *rodata_param = (void *)rodata + param->rodata_off;
+	int *rodata_param = (int *)((char *)rodata + param->rodata_off);
 	/* TODO: Maybe check if a value is in the allowed range. Or do that in the
 	 * BPF code.
 	 */
