@@ -71,7 +71,7 @@ static int parse_param(char *param_arg, struct powertcp_bpf__rodata *rodata)
 
 	char *end;
 	const char *reason;
-	double val;
+	long val;
 	errno = 0;
 	switch (param->type) {
 	case 'f':
