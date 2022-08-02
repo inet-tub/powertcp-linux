@@ -554,6 +554,7 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		unsigned long cwnd;                                            \
 		unsigned long rate;                                            \
 		unsigned long base_rtt_us;                                     \
+		bool updated;                                                  \
                                                                                \
 		if (unlikely(ca->host_bw == 0)) {                              \
 			return;                                                \
@@ -568,7 +569,11 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us /   \
 		       cwnd_scale;                                             \
 		set_rate(sk, rate);                                            \
-		func_prefix##_update_old(sk, rs, norm_power);                  \
+		updated = func_prefix##_update_old(sk, rs, norm_power);        \
+                                                                               \
+		if (updated) {                                                 \
+			trace_new_ack(sk);                                     \
+		}                                                              \
 	}                                                                      \
                                                                                \
 	static struct tcp_congestion_ops cong_ops_name __read_mostly = {       \
