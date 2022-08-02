@@ -78,12 +78,12 @@ struct powertcp {
 };
 
 /* Configuration variables only settable before loading the BPF object: */
-const volatile int base_rtt = default_base_rtt;
-const volatile int beta = default_beta;
-const volatile int expected_flows = default_expected_flows;
-const volatile int gamma = default_gamma;
-const volatile int hop_bw = default_hop_bw; /* Mbit/s */
-const volatile int host_bw = fallback_host_bw; /* Mbit/s */
+const volatile long base_rtt = default_base_rtt;
+const volatile long beta = default_beta;
+const volatile long expected_flows = default_expected_flows;
+const volatile long gamma = default_gamma;
+const volatile long hop_bw = default_hop_bw; /* Mbit/s */
+const volatile long host_bw = fallback_host_bw; /* Mbit/s */
 
 /* Look for the base (~= minimum) RTT (in us). */
 static unsigned long get_base_rtt(const struct sock *sk,
