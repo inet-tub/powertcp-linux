@@ -205,7 +205,10 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd)
 /* Set the socket pacing rate (bytes per second). */
 static void set_rate(struct sock *sk, unsigned long rate)
 {
-	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+	/* Before 4.20, sk_max_pacing_rate was only a u32. Use explicit min_t with
+	 * type here to avoid a warning on those older kernels.
+	 */
+	sk->sk_pacing_rate = min_t(unsigned long, rate, sk->sk_max_pacing_rate);
 }
 
 static void reset(struct sock *sk, enum tcp_ca_event ev,
