@@ -27,6 +27,10 @@
 #define CREATE_TRACE_POINTS
 #include "tcp_powertcp_trace.h"
 
+#ifndef BITS_TO_BYTES
+#define BITS_TO_BYTES(nr) __KERNEL_DIV_ROUND_UP(nr, BITS_PER_TYPE(char))
+#endif
+
 #define MEGA 1000000UL
 
 struct old_cwnd {
