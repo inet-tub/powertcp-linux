@@ -16,7 +16,6 @@ TRACE_EVENT(new_ack,
 	TP_PROTO(const struct sock *sk),
 	TP_ARGS(sk),
 	TP_STRUCT__entry(
-		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(u32, ack_seq)
 		__field(unsigned long, cwnd)
@@ -26,16 +25,15 @@ TRACE_EVENT(new_ack,
 		const struct powertcp *ca = inet_csk_ca(sk);
 		const struct tcp_sock *tp = tcp_sk(sk);
 
-		__entry->time = tp->tcp_mstamp;
 		__entry->hash = sk->sk_hash;
 		__entry->ack_seq = tp->snd_una;
 		__entry->cwnd = ca->snd_cwnd;
 		__entry->rate = sk->sk_pacing_rate;
 	),
 	TP_printk(
-		"time=%llu us hash=%u ack_seq=%u: cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
-		__entry->time, __entry->hash, __entry->ack_seq, cwnd_scale,
-		__entry->cwnd, __entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
+		"hash=%u ack_seq=%u: cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
+		__entry->hash, __entry->ack_seq, cwnd_scale, __entry->cwnd,
+		__entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
 );
 
 TRACE_EVENT(norm_power,
@@ -44,7 +42,6 @@ TRACE_EVENT(norm_power,
 		unsigned long p_norm, unsigned long p_smooth),
 	TP_ARGS(sk, dt, delta_t, rtt, rtt_grad, base_rtt, p_norm, p_smooth),
 	TP_STRUCT__entry(
-		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(unsigned long, dt)
 		__field(unsigned long, delta_t)
@@ -55,9 +52,6 @@ TRACE_EVENT(norm_power,
 		__field(unsigned long, p_smooth)
 	),
 	TP_fast_assign(
-		const struct tcp_sock *tp = tcp_sk(sk);
-
-		__entry->time = tp->tcp_mstamp;
 		__entry->hash = sk->sk_hash;
 		__entry->dt = dt;
 		__entry->delta_t = delta_t;
@@ -68,18 +62,17 @@ TRACE_EVENT(norm_power,
 		__entry->p_smooth = p_smooth;
 	),
 	TP_printk(
-		"time=%llu us hash=%u: dt=%lu us delta_t=%lu us rtt=%lu us rtt_grad*%lu=%lu base_rtt=%lu us p_norm*%lu=%lu => p_smooth*%lu=%lu",
-		__entry->time, __entry->hash, __entry->dt, __entry->delta_t, __entry->rtt,
-		power_scale, __entry->rtt_grad, __entry->base_rtt, power_scale,
-		__entry->p_norm, power_scale, __entry->p_smooth)
+		"hash=%u: dt=%lu us delta_t=%lu us rtt=%lu us rtt_grad*%lu=%lu base_rtt=%lu us p_norm*%lu=%lu => p_smooth*%lu=%lu",
+		__entry->hash, __entry->dt, __entry->delta_t, __entry->rtt, power_scale,
+		__entry->rtt_grad, __entry->base_rtt, power_scale, __entry->p_norm,
+		power_scale, __entry->p_smooth)
 )
 
 TRACE_EVENT(reset,
-	TP_PROTO(u64 time, unsigned int hash, enum tcp_ca_event ev,
+	TP_PROTO(unsigned int hash, enum tcp_ca_event ev,
 		unsigned long base_rtt, unsigned long cwnd, unsigned long rate),
-	TP_ARGS(time, hash, ev, base_rtt, cwnd, rate),
+	TP_ARGS(hash, ev, base_rtt, cwnd, rate),
 	TP_STRUCT__entry(
-		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(enum tcp_ca_event, ev)
 		__field(unsigned long, base_rtt)
@@ -87,7 +80,6 @@ TRACE_EVENT(reset,
 		__field(unsigned long, rate)
 	),
 	TP_fast_assign(
-		__entry->time = time;
 		__entry->hash = hash;
 		__entry->ev = ev;
 		__entry->base_rtt = base_rtt;
@@ -95,10 +87,9 @@ TRACE_EVENT(reset,
 		__entry->rate = rate;
 	),
 	TP_printk(
-		"time=%llu us hash=%u: ev=%d base_rtt=%lu cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
-		__entry->time, __entry->hash, __entry->ev, __entry->base_rtt,
-		cwnd_scale, __entry->cwnd, __entry->rate,
-		BITS_PER_BYTE * __entry->rate / MEGA)
+		"hash=%u: ev=%d base_rtt=%lu cwnd*%lu=%lu rate=%lu bytes/s (~%lu Mbit/s)",
+		__entry->hash, __entry->ev, __entry->base_rtt, cwnd_scale,
+		__entry->cwnd, __entry->rate, BITS_PER_BYTE * __entry->rate / MEGA)
 );
 
 TRACE_EVENT(update_window,
@@ -106,7 +97,6 @@ TRACE_EVENT(update_window,
 		unsigned long p_norm, unsigned long cwnd),
 	TP_ARGS(sk, cwnd_old, p_norm, cwnd),
 	TP_STRUCT__entry(
-		__field(u64, time)
 		__field(unsigned int, hash)
 		__field(unsigned long, cwnd_old)
 		__field(unsigned long, snd_cwnd)
@@ -118,7 +108,6 @@ TRACE_EVENT(update_window,
 		const struct powertcp *ca = inet_csk_ca(sk);
 		const struct tcp_sock *tp = tcp_sk(sk);
 
-		__entry->time = tp->tcp_mstamp;
 		__entry->hash = sk->sk_hash;
 		__entry->cwnd_old = cwnd_old;
 		__entry->snd_cwnd = tp->snd_cwnd;
@@ -127,8 +116,8 @@ TRACE_EVENT(update_window,
 		__entry->cwnd = cwnd;
 	),
 	TP_printk(
-		"time=%llu us hash=%u: cwnd_old*%lu=%lu cwnd*%lu=%lu p_norm*%lu=%lu  beta=%lu => cwnd*%lu=%lu",
-		__entry->time, __entry->hash, cwnd_scale, __entry->cwnd_old, cwnd_scale,
+		"hash=%u: cwnd_old*%lu=%lu cwnd*%lu=%lu p_norm*%lu=%lu  beta=%lu => cwnd*%lu=%lu",
+		__entry->hash, cwnd_scale, __entry->cwnd_old, cwnd_scale,
 		__entry->snd_cwnd, power_scale, __entry->p_norm, __entry->beta,
 		cwnd_scale, __entry->cwnd)
 );
