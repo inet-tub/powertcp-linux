@@ -49,6 +49,7 @@ struct powertcp_int {
 };
 
 struct powertcp {
+	unsigned long base_rtt;
 	unsigned long snd_cwnd;
 
 	union {
@@ -84,30 +85,6 @@ const volatile long expected_flows = default_expected_flows;
 const volatile long gamma = default_gamma;
 const volatile long hop_bw = default_hop_bw; /* Mbit/s */
 const volatile long host_bw = fallback_host_bw; /* Mbit/s */
-
-/* Look for the base (~= minimum) RTT (in us). */
-static unsigned long get_base_rtt(const struct sock *sk,
-				  const struct rate_sample *rs)
-{
-	const struct tcp_sock *tp = tcp_sk(sk);
-	__u32 min_rtt;
-
-	if (base_rtt > -1) {
-		return base_rtt;
-	}
-
-	min_rtt = tcp_min_rtt(tp);
-	if (min_rtt != ~0U) {
-		return min_rtt;
-	}
-
-	if (rs && rs->rtt_us != -1L) {
-		return rs->rtt_us;
-	}
-
-	/* bbr_init_pacing_rate_from_rtt() also uses this as fallback. */
-	return USEC_PER_SEC;
-}
 
 static void clear_old_cwnds(struct sock *sk)
 {
@@ -297,26 +274,53 @@ static void set_rate(struct sock *sk, unsigned long rate)
 #endif
 }
 
-static void reset(struct sock *sk, enum tcp_ca_event ev,
-		  unsigned long base_rtt_us)
+/* Look for the base (~= minimum) RTT (in us). */
+static void update_base_rtt(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+	u32 min_rtt;
+
+	if (base_rtt > -1) {
+		ca->base_rtt = base_rtt;
+		return;
+	}
+
+	min_rtt = tcp_min_rtt(tp);
+	if (min_rtt != ~0U) {
+		ca->base_rtt = min_rtt;
+		return;
+	}
+
+	min_rtt = tp->srtt_us >> 3;
+	if (min_rtt) {
+		ca->base_rtt = min_rtt;
+		return;
+	}
+
+	/* bbr_init_pacing_rate_from_rtt() also uses this as fallback. */
+	ca->base_rtt = USEC_PER_SEC;
+}
+
+static void reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long cwnd;
 	unsigned long rate;
 
+	if (ev == CA_EVENT_TX_START || ev == CA_EVENT_CWND_RESTART) {
+		update_base_rtt(sk);
+	}
+
 	/* Only reset those values on a CA_EVENT_CWND_RESTART (used on
 	 * initialization). Otherwise we would reset cwnd and rate too frequently if
 	 * there are frequent CA_EVENT_TX_STARTs.
 	 */
 	if (ev == CA_EVENT_CWND_RESTART) {
-		if (base_rtt_us == 0) {
-			base_rtt_us = get_base_rtt(sk, NULL);
-		}
-
 		rate = BITS_TO_BYTES(MEGA * ca->host_bw);
 		set_rate(sk, rate);
-		cwnd = cwnd_scale * rate * base_rtt_us / tp->mss_cache /
+		cwnd = cwnd_scale * rate * ca->base_rtt / tp->mss_cache /
 		       USEC_PER_SEC;
 		set_cwnd(sk, cwnd);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
@@ -327,7 +331,7 @@ static void reset(struct sock *sk, enum tcp_ca_event ev,
 	}
 }
 
-static void update_beta(struct sock *sk, unsigned long base_rtt_us)
+static void update_beta(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -340,7 +344,7 @@ static void update_beta(struct sock *sk, unsigned long base_rtt_us)
 		 */
 		unsigned long new_beta =
 			BITS_TO_BYTES(cwnd_scale /* * MEGA */ * ca->host_bw *
-				      base_rtt_us / expected_flows) /
+				      ca->base_rtt / expected_flows) /
 			tp->mss_cache /* / USEC_PER_SEC */;
 		ca->beta = min(ca->beta, new_beta);
 	}
@@ -383,8 +387,7 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 }
 
 static unsigned long ptcp_norm_power(struct sock *sk,
-				     const struct rate_sample *rs,
-				     unsigned long base_rtt_us)
+				     const struct rate_sample *rs)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	unsigned long delta_t = 0;
@@ -420,7 +423,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 */
 		unsigned long lambda = max(1ul, queue_grad + rate);
 		unsigned long bdp =
-			hop_int->bandwidth * base_rtt_us / USEC_PER_SEC;
+			hop_int->bandwidth * ca->base_rtt / USEC_PER_SEC;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
 		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
@@ -428,7 +431,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 */
 		unsigned long equilibrium =
 			max(hop_int->bandwidth / USEC_PER_SEC *
-				    hop_int->bandwidth * base_rtt_us,
+				    hop_int->bandwidth * ca->base_rtt,
 			    1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm) {
@@ -437,18 +440,18 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		}
 	}
 
-	delta_t = min(delta_t, base_rtt_us);
-	p_smooth = p_smooth == 0 ? p_norm :
-					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
+	delta_t = min(delta_t, ca->base_rtt);
+	p_smooth = p_smooth == 0 ?
+				 p_norm :
+				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
 
 	return p_smooth;
 }
 
-static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev,
-		       unsigned long base_rtt_us)
+static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	/* TODO: Anything special to do here for this variant? */
-	reset(sk, ev, base_rtt_us);
+	reset(sk, ev);
 }
 
 static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
@@ -468,8 +471,7 @@ static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 }
 
 static unsigned long rttptcp_norm_power(const struct sock *sk,
-					const struct rate_sample *rs,
-					unsigned long base_rtt_us)
+					const struct rate_sample *rs)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -487,29 +489,27 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	 */
 	dt = tp->tcp_mstamp - ca->rttptcp.t_prev;
 	dt = max(dt, 1UL);
-	delta_t = min(dt, base_rtt_us);
+	delta_t = min(dt, ca->base_rtt);
 	/* Limiting rtt_grad to non-negative values. */
 	rtt_grad = power_scale *
 		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
-	p_norm = (rtt_grad + power_scale) * rtt_us / base_rtt_us;
+	p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
 	 */
-	p_smooth = p_smooth == 0 ? p_norm :
-					 ewma(delta_t, base_rtt_us, p_norm, p_smooth);
+	p_smooth = p_smooth == 0 ?
+				 p_norm :
+				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
 
 	return p_smooth;
 }
 
-static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
-			  unsigned long base_rtt_us)
+static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (base_rtt_us == 0) {
-		base_rtt_us = get_base_rtt(sk, NULL);
-	}
+	reset(sk, ev);
 
 	/* Only reset those on initialization. */
 	if (ev == CA_EVENT_CWND_RESTART) {
@@ -520,8 +520,6 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev,
 	}
 
 	ca->rttptcp.t_prev = tp->tcp_mstamp;
-
-	reset(sk, ev, base_rtt_us);
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
@@ -570,7 +568,7 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		}                                                              \
                                                                                \
 		if (ev == CA_EVENT_TX_START) {                                 \
-			func_prefix##_reset(sk, ev, 0);                        \
+			func_prefix##_reset(sk, ev);                           \
 		}                                                              \
 	}                                                                      \
                                                                                \
@@ -588,9 +586,10 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		} else {                                                       \
 			ca->beta = beta;                                       \
 		}                                                              \
+		ca->base_rtt = ULONG_MAX;                                      \
 		ca->host_bw = get_host_bw(sk);                                 \
                                                                                \
-		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART, 0);             \
+		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART);                \
                                                                                \
 		require_pacing(sk);                                            \
 	}                                                                      \
@@ -605,19 +604,17 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		unsigned long norm_power;                                      \
 		unsigned long cwnd;                                            \
 		unsigned long rate;                                            \
-		unsigned long base_rtt_us;                                     \
                                                                                \
 		if (ca->host_bw == 0) {                                        \
 			return;                                                \
 		}                                                              \
                                                                                \
-		base_rtt_us = get_base_rtt(sk, rs);                            \
-		update_beta(sk, base_rtt_us);                                  \
+		update_beta(sk);                                               \
                                                                                \
 		cwnd_old = get_cwnd(sk);                                       \
-		norm_power = func_prefix##_norm_power(sk, rs, base_rtt_us);    \
+		norm_power = func_prefix##_norm_power(sk, rs);                 \
 		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power);  \
-		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / base_rtt_us /   \
+		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / ca->base_rtt /  \
 		       cwnd_scale;                                             \
 		set_rate(sk, rate);                                            \
 		func_prefix##_update_old(sk, rs, norm_power);                  \

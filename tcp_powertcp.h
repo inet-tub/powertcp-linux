@@ -11,6 +11,7 @@
 #endif
 
 struct powertcp {
+	unsigned long base_rtt;
 	unsigned long snd_cwnd;
 
 	union {
