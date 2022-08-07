@@ -578,12 +578,8 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 			     sizeof(((struct inet_connection_sock *)NULL)      \
 					    ->icsk_ca_priv));                  \
                                                                                \
-		if (beta < 0) {                                                \
-			ca->beta = ULONG_MAX;                                  \
-		} else {                                                       \
-			ca->beta = beta;                                       \
-		}                                                              \
 		ca->base_rtt = ULONG_MAX;                                      \
+		ca->beta = beta < 0 ? ULONG_MAX : beta;                        \
 		ca->host_bw = get_host_bw(sk);                                 \
                                                                                \
 		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART);                \

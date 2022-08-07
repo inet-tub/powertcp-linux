@@ -523,12 +523,8 @@ static unsigned long rttptcp_update_window(struct sock *sk,
                                                                                \
 		memset(&ca->func_prefix, 0, sizeof(ca->func_prefix));          \
                                                                                \
-		if (beta < 0) {                                                \
-			ca->beta = ULONG_MAX;                                  \
-		} else {                                                       \
-			ca->beta = beta;                                       \
-		}                                                              \
 		ca->base_rtt = ULONG_MAX;                                      \
+		ca->beta = beta < 0 ? ULONG_MAX : beta;                        \
 		ca->host_bw = get_host_bw(sk);                                 \
 		INIT_LIST_HEAD(&ca->old_cwnds);                                \
                                                                                \
