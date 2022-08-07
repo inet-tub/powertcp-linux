@@ -215,6 +215,20 @@ static void update_base_rtt(struct sock *sk)
 	ca->base_rtt = USEC_PER_SEC;
 }
 
+static void update_beta(struct sock *sk, unsigned long old_base_rtt)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	if (ca->base_rtt < old_base_rtt) {
+		unsigned long new_beta =
+			BITS_TO_BYTES(cwnd_scale /* * MEGA */ * ca->host_bw *
+				      ca->base_rtt / expected_flows) /
+			tp->mss_cache /* / USEC_PER_SEC */;
+		ca->beta = min(ca->beta, new_beta);
+	}
+}
+
 static void reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -223,7 +237,9 @@ static void reset(struct sock *sk, enum tcp_ca_event ev)
 	unsigned long rate;
 
 	if (ev == CA_EVENT_TX_START || ev == CA_EVENT_CWND_RESTART) {
+		unsigned long old_base_rtt = ca->base_rtt;
 		update_base_rtt(sk);
+		update_beta(sk, old_base_rtt);
 	}
 
 	/* Only reset those values on a CA_EVENT_CWND_RESTART (used on
@@ -245,25 +261,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev)
 
 	trace_reset(sk->sk_hash, ev, ca->base_rtt, ca->snd_cwnd,
 		    sk->sk_pacing_rate);
-}
-
-static void update_beta(struct sock *sk)
-{
-	struct powertcp *ca = inet_csk_ca(sk);
-	const struct tcp_sock *tp = tcp_sk(sk);
-
-	if (beta < 0) {
-		/* We are actually looking whether the base RTT got smaller, but don't
-		 * want to remember that in a separate variable in struct powertcp.
-		 * Space is precious in there. All values besides the base RTT and,
-		 * rarely, the MSS do not change at runtime in the calculation of beta.
-		 */
-		unsigned long new_beta =
-			BITS_TO_BYTES(cwnd_scale /* * MEGA */ * ca->host_bw *
-				      ca->base_rtt / expected_flows) /
-			tp->mss_cache /* / USEC_PER_SEC */;
-		ca->beta = min(ca->beta, new_beta);
-	}
 }
 
 /* Update the list of recent snd_cwnds. */
@@ -556,8 +553,6 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		if (unlikely(ca->host_bw == 0)) {                              \
 			return;                                                \
 		}                                                              \
-                                                                               \
-		update_beta(sk);                                               \
                                                                                \
 		cwnd_old = get_cwnd(sk);                                       \
 		norm_power = func_prefix##_norm_power(sk, rs);                 \
