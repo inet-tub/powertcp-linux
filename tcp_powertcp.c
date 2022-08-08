@@ -220,7 +220,8 @@ static void update_beta(struct sock *sk, unsigned long old_base_rtt)
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (ca->base_rtt < old_base_rtt) {
+	if (beta < 0 &&
+	    (ca->base_rtt < old_base_rtt || old_base_rtt == ULONG_MAX)) {
 		unsigned long new_beta =
 			BITS_TO_BYTES(cwnd_scale /* * MEGA */ * ca->host_bw *
 				      ca->base_rtt / expected_flows) /
