@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Setup the BPF implementation and TCP-INT and start a screen session to use it
+# (for e.g. iperf3 usage or with already running iperf(3) servers).
+#
+# (Unfortunately) relies on sudo.
+
+set -eu
+
+repo_dir=${0%/*}/..
+session=${1-}
+
+[ $# -eq 0 ] || shift
+
+if [ ! -d "$repo_dir/tools" ]; then
+	echo "must be called from within the repository" >&2
+	exit 2
+fi
+
+make -C bpf
+make -C bpf/tcp-int/code/src
+
+sudo ./bpf/powertcp unregister || :
+sudo ./bpf/tcp-int/code/src/tools/tcp_int unload || :
+
+sudo ./bpf/tcp-int/code/src/tools/tcp_int load
+sudo ./bpf/powertcp register "$@"
+
+echo $$ | sudo tee -a /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
+
+sudo screen ${session:+-S "$session" "$repo_dir/tools/screen/$session.screen"}
