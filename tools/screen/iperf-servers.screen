@@ -1,0 +1,2 @@
+screen iperf -s
+screen iperf3 -s

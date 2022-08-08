@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Setup the BPF implementation and TCP-INT and start a screen session to use it
+# (for e.g. iperf3 usage or with already running iperf(3) servers).
+#
+# (Unfortunately) relies on sudo.
+
+set -eu
+
+repo_dir=${0%/*}/..
+session=${1-}
+
+[ $# -eq 0 ] || shift
+
+if [ ! -d "$repo_dir/tools" ]; then
+	echo "must be called from within the repository" >&2
+	exit 2
+fi
+
+make
+
+! lsmod | grep -q ^tcp_powertcp || sudo rmmod tcp_powertcp
+sudo insmod "$repo_dir/tcp_powertcp.ko" "$@"
+
+sudo screen ${session:+-S "$session" -c "$repo_dir/tools/screen/$session.screen"}
