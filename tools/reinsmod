@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# Remove a module (if loaded) and add it to the kernel (again).
+#
+# Usage: reinsmod MODULENAME [MODULE_PARAMETER...]
+
+set -eu
+
+modpath=$1
+shift
+
+modname=${modpath##*/}
+modname=${modname%.ko}
+
+! lsmod | grep -q "$modname" || rmmod "$modname"
+insmod "$modpath" "$@"
