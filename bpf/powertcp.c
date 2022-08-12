@@ -191,7 +191,6 @@ static int do_register(int argc, char *argv[])
 {
 	int r = EXIT_SUCCESS;
 	struct powertcp_bpf *skel;
-	struct bpf_link *link = NULL;
 	int map_fd = -1;
 	struct bpf_map *map_tcp_int_state = NULL;
 
@@ -249,7 +248,6 @@ fail:
 	if (map_fd > -1) {
 		close(map_fd);
 	}
-	bpf_link__destroy(link);
 	powertcp_bpf__destroy(skel);
 
 	return r;
