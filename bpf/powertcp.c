@@ -24,23 +24,48 @@
 #include <string.h>
 #include <unistd.h>
 
+struct powertcp_param;
+
+typedef int param_conv_func(const struct powertcp_param *, const char *,
+			    long *);
+
 struct powertcp_param {
 	const char *name;
-	char type;
+	param_conv_func *conv_func;
 	size_t rodata_off;
 	double scale;
 };
+
+static int conv_param_d(const struct powertcp_param *param, const char *str,
+			long *val)
+{
+	char *end;
+	errno = 0;
+	*val = strtod(str, &end) * param->scale;
+	return end == str || *end != '\0' ? EINVAL : errno;
+}
+
+static int conv_param_l(const struct powertcp_param *param, const char *str,
+			long *val)
+{
+	char *end;
+	(void)param;
+	errno = 0;
+	*val = strtol(str, &end, 10);
+	return end == str || *end != '\0' ? EINVAL : errno;
+}
 
 #define POWERTCP_RODATA_OFFSET(member)                                         \
 	offsetof(struct powertcp_bpf__rodata, member)
 /* The scale value is irrelevant for integer parameters. */
 static const struct powertcp_param params[] = {
-	{ "base_rtt", 'i', POWERTCP_RODATA_OFFSET(base_rtt), 1.0 },
-	{ "beta", 'f', POWERTCP_RODATA_OFFSET(beta), cwnd_scale },
-	{ "expected_flows", 'i', POWERTCP_RODATA_OFFSET(expected_flows), 1.0 },
-	{ "gamma", 'f', POWERTCP_RODATA_OFFSET(gamma), gamma_scale },
-	{ "hop_bw", 'i', POWERTCP_RODATA_OFFSET(hop_bw), 1.0 },
-	{ "host_bw", 'i', POWERTCP_RODATA_OFFSET(host_bw), 1.0 },
+	{ "base_rtt", conv_param_l, POWERTCP_RODATA_OFFSET(base_rtt), 1.0 },
+	{ "beta", conv_param_d, POWERTCP_RODATA_OFFSET(beta), cwnd_scale },
+	{ "expected_flows", conv_param_l,
+	  POWERTCP_RODATA_OFFSET(expected_flows), 1.0 },
+	{ "gamma", conv_param_d, POWERTCP_RODATA_OFFSET(gamma), gamma_scale },
+	{ "hop_bw", conv_param_l, POWERTCP_RODATA_OFFSET(hop_bw), 1.0 },
+	{ "host_bw", conv_param_l, POWERTCP_RODATA_OFFSET(host_bw), 1.0 },
 	{ 0 }
 };
 #undef POWERTCP_RODATA_OFFSET
@@ -69,28 +94,11 @@ static int parse_param(char *param_arg, struct powertcp_bpf__rodata *rodata)
 		tok = "";
 	}
 
-	char *end;
-	const char *reason;
 	long val;
-	errno = 0;
-	switch (param->type) {
-	case 'f':
-		reason = "Not a floating-point number";
-		val = strtod(tok, &end) * param->scale;
-		break;
-	case 'i':
-		reason = "Not an integer number";
-		val = strtol(tok, &end, 10);
-		break;
-	default:
-		assert(false);
-		return -1;
-	}
-
-	if (end == tok || *end != '\0' || errno != 0) {
+	int r = param->conv_func(param, tok, &val);
+	if (r != 0) {
 		fprintf(stderr, "Invalid value '%s' for parameter %s: %s\n",
-			tok, param->name,
-			errno != 0 ? strerror(errno) : reason);
+			tok, param->name, strerror(r));
 		return -1;
 	}
 
