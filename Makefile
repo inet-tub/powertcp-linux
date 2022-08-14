@@ -16,7 +16,7 @@ modules modules_install clean help:
 
 .PHONY: dkms_install
 dkms_install:
-	dkms install $(PWD)
+	dkms install .
 
 .PHONY: dkms_uninstall
 dkms_uninstall:
