@@ -14,13 +14,15 @@ KDIR ?= /lib/modules/$(shell uname -r)/build
 modules modules_install clean help:
 	$(MAKE) -C $(KDIR) M=$$PWD $@
 
+dkms_package_version := $(shell awk -F= '$$1 == "PACKAGE_VERSION" { gsub("\"", "", $$2); print $$2 }' dkms.conf)
+
 .PHONY: dkms_install
 dkms_install:
 	dkms install .
 
 .PHONY: dkms_uninstall
 dkms_uninstall:
-	dkms remove --all powertcp/0.0.1
-	$(RM) -r /usr/src/powertcp-0.0.1
+	dkms remove --all powertcp/$(dkms_package_version)
+	$(RM) -r /usr/src/powertcp-$(dkms_package_version)
 
 endif
