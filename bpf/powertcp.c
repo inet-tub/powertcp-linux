@@ -85,7 +85,7 @@ static int parse_param(char *param_arg, struct powertcp_bpf__rodata *rodata)
 	}
 
 	if (!param->name) {
-		fprintf(stderr, "Unknown argument '%s'\n", tok);
+		fprintf(stderr, "Unknown algorithm parameter '%s'\n", tok);
 		return -1;
 	}
 
