@@ -58,6 +58,7 @@ static int base_rtt __read_mostly = default_base_rtt;
 static int beta __read_mostly = default_beta;
 static int expected_flows __read_mostly = default_expected_flows;
 static int gamma __read_mostly = default_gamma;
+static int host_bw __read_mostly = -1;
 
 module_param(base_rtt, int, 0444);
 MODULE_PARM_DESC(
@@ -72,6 +73,10 @@ MODULE_PARM_DESC(expected_flows,
 module_param(gamma, int, 0444);
 MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
 				gamma_scale) "(default: 921 ~= 0,9)");
+module_param(host_bw, int, 0444);
+MODULE_PARM_DESC(
+	host_bw,
+	"bandwidth of the host network interface(s) in Mbit/s (default: -1; -1: detect automatically from socket)");
 
 static void clear_old_cwnds(struct sock *sk)
 {
@@ -119,9 +124,14 @@ static unsigned long get_cwnd(const struct sock *sk)
 /* Look for the host bandwidth (in Mbit/s). */
 static unsigned long get_host_bw(struct sock *sk)
 {
-	const struct dst_entry *dst = __sk_dst_get(sk);
+	const struct dst_entry *dst;
 	unsigned long bw = fallback_host_bw;
 
+	if (host_bw > 0) {
+		return host_bw;
+	}
+
+	dst = __sk_dst_get(sk);
 	if (dst && dst->dev) {
 		struct ethtool_link_ksettings cmd;
 		int r;
