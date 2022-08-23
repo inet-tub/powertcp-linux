@@ -42,7 +42,7 @@ static const int hpcc_max_opsize = 2 + 42;
 struct hpcc_hop_int {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	// clang-format off
-	// TODO: I probably messed this up:
+	// TODO: I might have messed this up:
 	u64 qlen: 16,
 	    tx_bytes: 20,
 	    ts: 24,
@@ -68,6 +68,7 @@ union hpcc_hop_int_word {
 struct hpcc_int_head {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	// clang-format off
+	// TODO: I might have messed this up:
 	u16 path_id: 12,
 	    n_hop:   4;
 	// clang-format on
