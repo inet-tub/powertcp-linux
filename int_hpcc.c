@@ -229,7 +229,6 @@ static struct nf_hook_ops ptcp_nf_ops[] __read_mostly = {
 
 static int __net_init ptcp_nf_register(struct net *net)
 {
-	pr_warn("registering PowerTCP Netfilter hooks\n");
 	return nf_register_net_hooks(net, ptcp_nf_ops, ARRAY_SIZE(ptcp_nf_ops));
 }
 
