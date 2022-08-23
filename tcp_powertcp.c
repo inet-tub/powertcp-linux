@@ -334,6 +334,17 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 }
 
 #ifdef POWERTCP_INT_IMPL_FILE
+static void ptcp_init(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+
+	ca->ptcp.int_impl = int_impl_init(sk);
+	if (sizeof(ca->ptcp.int_impl) && !ca->ptcp.int_impl) {
+		/* Well, what to do here on init-failure? Cease operations for now. */
+		ca->host_bw = 0;
+	}
+}
+
 static unsigned long ptcp_norm_power(struct sock *sk,
 				     const struct rate_sample *rs)
 {
@@ -396,6 +407,12 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 	return p_smooth;
 }
 
+static void ptcp_release(struct sock *sk)
+{
+	struct powertcp *ca = inet_csk_ca(sk);
+	int_impl_release(ca->ptcp.int_impl);
+}
+
 static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	/* TODO: Anything special to do here for this variant? */
@@ -416,6 +433,11 @@ static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 	return update_window(sk, cwnd_old, norm_power);
 }
 #endif
+
+static void rttptcp_init(struct sock *sk)
+{
+	/* no-op */
+}
 
 static unsigned long rttptcp_norm_power(const struct sock *sk,
 					const struct rate_sample *rs)
@@ -452,6 +474,11 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 			 p_norm, p_smooth);
 
 	return p_smooth;
+}
+
+static void rttptcp_release(struct sock *sk)
+{
+	/* no-op */
 }
 
 static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
@@ -537,6 +564,8 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		/* We do want sk_pacing_rate to be respected: */               \
 		cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE,                 \
 			SK_PACING_NEEDED);                                     \
+                                                                               \
+		func_prefix##_init(sk);                                        \
 	}                                                                      \
                                                                                \
 	void powertcp_##func_prefix##_cong_control(                            \
@@ -567,27 +596,29 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		}                                                              \
 	}                                                                      \
                                                                                \
+	static void powertcp_##func_prefix##_release(struct sock *sk)          \
+	{                                                                      \
+		const struct powertcp *ca = inet_csk_ca(sk);                   \
+                                                                               \
+		if (unlikely(ca->host_bw == 0)) {                              \
+			return;                                                \
+		}                                                              \
+                                                                               \
+		func_prefix##_release(sk);                                     \
+                                                                               \
+		clear_old_cwnds(sk);                                           \
+	}                                                                      \
+                                                                               \
 	static struct tcp_congestion_ops cong_ops_name __read_mostly = {       \
 		.cong_control = powertcp_##func_prefix##_cong_control,         \
 		.cwnd_event = powertcp_##func_prefix##_cwnd_event,             \
 		.init = powertcp_##func_prefix##_init,                         \
 		.name = #cong_ops_name,                                        \
 		.owner = THIS_MODULE,                                          \
-		.release = powertcp_release,                                   \
+		.release = powertcp_##func_prefix##_release,                   \
 		.ssthresh = powertcp_ssthresh,                                 \
 		.undo_cwnd = powertcp_undo_cwnd,                               \
 	}
-
-static void powertcp_release(struct sock *sk)
-{
-	const struct powertcp *ca = inet_csk_ca(sk);
-
-	if (unlikely(ca->host_bw == 0)) {
-		return;
-	}
-
-	clear_old_cwnds(sk);
-}
 
 static u32 powertcp_ssthresh(struct sock *sk)
 {

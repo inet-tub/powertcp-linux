@@ -34,6 +34,8 @@ struct powertcp_int {
 	int path_id;
 	struct powertcp_hop_int hops[max_n_hops];
 };
+
+struct powertcp_int_impl;
 #endif
 
 struct powertcp {
@@ -43,8 +45,7 @@ struct powertcp {
 	union {
 #ifdef POWERTCP_INT_HEADER_FILE
 		struct {
-			struct powertcp_int curr_int;
-			struct powertcp_int prev_int;
+			struct powertcp_int_impl *int_impl;
 		} ptcp;
 #endif
 		struct {

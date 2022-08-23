@@ -92,17 +92,24 @@ enum hpcc_port_speed {
 	HPCC_PORT_SPEED_TODO = 0,
 };
 
+struct powertcp_int_impl {
+	struct powertcp_int curr_int;
+	struct powertcp_int prev_int;
+	union hpcc_int_head_word echo_head_word;
+	union hpcc_hop_int_word echo_word[max_n_hops];
+};
+
 static const struct powertcp_int *get_int(struct sock *sk,
 					  const struct powertcp_int *prev_int)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
-	return &ca->ptcp.curr_int;
+	return &ca->ptcp.int_impl->curr_int;
 }
 
 static const struct powertcp_int *get_prev_int(struct sock *sk)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
-	return &ca->ptcp.prev_int;
+	return &ca->ptcp.int_impl->prev_int;
 }
 
 static u32 hpcc_bandwidth_to_bytes(u32 bw)
@@ -116,11 +123,22 @@ static u32 hpcc_bandwidth_to_bytes(u32 bw)
 	return BITS_TO_BYTES(MEGA * 1000);
 }
 
+static struct powertcp_int_impl *int_impl_init(struct sock *sk)
+{
+	return kmalloc(sizeof(struct powertcp_int_impl),
+		       GFP_KERNEL | __GFP_ZERO);
+}
+
+static void int_impl_release(struct powertcp_int_impl *int_impl)
+{
+	kfree(int_impl);
+}
+
 static void ptcp_parse_hpcc_opt(struct sock *sk, const unsigned char *ptr,
 				int len)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
-	struct powertcp_int *curr_int = &ca->ptcp.curr_int;
+	struct powertcp_int *curr_int = &ca->ptcp.int_impl->curr_int;
 	union hpcc_int_head_word head_word;
 	int i;
 
