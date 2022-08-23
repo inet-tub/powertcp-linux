@@ -10,35 +10,50 @@
 #define MEGA 1000000UL
 #endif
 
-struct powertcp {
-	unsigned long base_rtt;
-	unsigned long snd_cwnd;
+#define POWERTCP_STRUCT(struct_name, fields)                                                \
+	struct struct_name {                                                                \
+		unsigned long base_rtt;                                                     \
+		unsigned long snd_cwnd;                                                     \
+                                                                                            \
+		unsigned long beta;                                                         \
+                                                                                            \
+		/* TODO: Investigate if this frequently updated list decreases \
+		 * performance and another data structure would improve that. \
+		 */            \
+		struct list_head old_cwnds;                                                 \
+                                                                                            \
+		unsigned long p_smooth;                                                     \
+                                                                                            \
+		/* powertcp_cong_control() seems to (unexpectedly) get called once before \
+		 * powertcp_init(). host_bw is still 0 then, thanks to \
+		 * tcp_assign_congestion_control(), and we use that as an indicator whether \
+		 * we are initialized. \
+		 */ \
+		unsigned long host_bw; /* Mbit/s */                                         \
+                                                                                            \
+		fields                                                                      \
+	}
+#define POWERTCP_STRUCT_FIELDS(...) __VA_ARGS__
 
-	union {
-		struct {
-			// TODO: Add variant-specific members as needed.
-		} ptcp;
-		struct {
-			u32 last_updated;
-			unsigned long prev_rtt_us;
-			u64 t_prev;
-		} rttptcp;
-	};
+// clang-format off
+POWERTCP_STRUCT(powertcp, POWERTCP_STRUCT_FIELDS());
 
-	unsigned long beta;
+POWERTCP_STRUCT(ptcp_powertcp,
+	POWERTCP_STRUCT_FIELDS(
+		// TODO: Add variant-specific members as needed.
+	)
+);
 
-	// TODO: Investigate if this frequently updated list decreases performance
-	// and another data structure would improve that.
-	struct list_head old_cwnds;
+POWERTCP_STRUCT(rttptcp_powertcp,
+	POWERTCP_STRUCT_FIELDS(
+		u32 last_updated;
+		unsigned long prev_rtt_us;
+		u64 t_prev;
+	)
+);
+// clang-format on
 
-	unsigned long p_smooth;
-
-	/* powertcp_cong_control() seems to (unexpectedly) get called once before
-	 * powertcp_init(). host_bw is still 0 then, thanks to
-	 * tcp_assign_congestion_control(), and we use that as an indicator whether
-	 * we are initialized.
-	 */
-	unsigned long host_bw; /* Mbit/s */
-};
+#undef POWERTCP_STRUCT
+#undef POWERTCP_STRUCT_FIELDS
 
 #endif /* _TCP_POWERTCP_H */

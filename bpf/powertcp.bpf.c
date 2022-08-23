@@ -61,35 +61,49 @@ struct powertcp_int {
 	struct powertcp_hop_int hops[max_n_hops];
 };
 
-struct powertcp {
-	unsigned long base_rtt;
-	unsigned long snd_cwnd;
+#define POWERTCP_STRUCT(struct_name, fields)                                                \
+	struct struct_name {                                                                \
+		unsigned long base_rtt;                                                     \
+		unsigned long snd_cwnd;                                                     \
+                                                                                            \
+		unsigned long beta;                                                         \
+                                                                                            \
+		struct old_cwnd old_cwnd;                                                   \
+                                                                                            \
+		unsigned long p_smooth;                                                     \
+                                                                                            \
+		/* powertcp_cong_control() seems to (unexpectedly) get called once before \
+		 * powertcp_init(). host_bw is still 0 then, thanks to \
+		 * tcp_assign_congestion_control(), and we use that as an indicator whether \
+		 * we are initialized. \
+		 */ \
+		unsigned long host_bw; /* Mbit/s */                                         \
+                                                                                            \
+		fields                                                                      \
+	}
+#define POWERTCP_STRUCT_FIELDS(...) __VA_ARGS__
 
-	union {
-		struct {
-			struct powertcp_int cached_int;
-			struct powertcp_int prev_int;
-		} ptcp;
-		struct {
-			__u32 last_updated;
-			unsigned long prev_rtt_us;
-			__u64 t_prev;
-		} rttptcp;
-	};
+// clang-format off
+POWERTCP_STRUCT(powertcp, POWERTCP_STRUCT_FIELDS());
 
-	unsigned long beta;
+POWERTCP_STRUCT(ptcp_powertcp,
+	POWERTCP_STRUCT_FIELDS(
+		struct powertcp_int cached_int;
+		struct powertcp_int prev_int;
+	)
+);
 
-	struct old_cwnd old_cwnd;
+POWERTCP_STRUCT(rttptcp_powertcp,
+	POWERTCP_STRUCT_FIELDS(
+		__u32 last_updated;
+		unsigned long prev_rtt_us;
+		__u64 t_prev;
+	)
+);
+// clang-format on
 
-	unsigned long p_smooth;
-
-	/* powertcp_cong_control() seems to (unexpectedly) get called once before
-	 * powertcp_init(). host_bw is still 0 then, thanks to
-	 * tcp_assign_congestion_control(), and we use that as an indicator whether
-	 * we are initialized.
-	 */
-	unsigned long host_bw; /* Mbit/s */
-};
+#undef POWERTCP_STRUCT
+#undef POWERTCP_STRUCT_FIELDS
 
 /* Configuration variables only settable before loading the BPF object: */
 const volatile long base_rtt = default_base_rtt;
@@ -178,7 +192,7 @@ static unsigned long get_host_bw(struct sock *sk)
 static const struct powertcp_int *get_int(struct sock *sk,
 					  const struct powertcp_int *prev_int)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct ptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	/* Not using tcp_int_get_state() here since it uses
 	 * BPF_SK_STORAGE_GET_F_CREATE. We might want to use a missing map entry as
@@ -198,25 +212,25 @@ static const struct powertcp_int *get_int(struct sock *sk,
 					      ts - prev_int->hops[0].ts) &
 			   max_ts;
 
-		ca->ptcp.cached_int.n_hop = 1;
+		ca->cached_int.n_hop = 1;
 		/* TCP-INT does not provide an identification for the path. */
 		/* TODO: Evaluate if it makes sense to use the switch ID as path ID.
 		 * Could lead to a too frequently detected path change, though.
 		 */
-		ca->ptcp.cached_int.path_id = 1;
+		ca->cached_int.path_id = 1;
 
-		ca->ptcp.cached_int.hops[0].bandwidth = bandwidth;
-		ca->ptcp.cached_int.hops[0].qlen = tint->qdepth;
-		ca->ptcp.cached_int.hops[0].ts = ts;
+		ca->cached_int.hops[0].bandwidth = bandwidth;
+		ca->cached_int.hops[0].qlen = tint->qdepth;
+		ca->cached_int.hops[0].ts = ts;
 		/* In lack of a tx_bytes value, we estimate it here. A factor of
 		 * MEGA/USEC_PER_SEC is cancelled in the calculation:
 		 */
-		ca->ptcp.cached_int.hops[0].tx_bytes =
+		ca->cached_int.hops[0].tx_bytes =
 			bandwidth * tint->util / 100 / NSEC_PER_USEC * dt;
 
-		return &ca->ptcp.cached_int;
+		return &ca->cached_int;
 	} else {
-		ca->ptcp.cached_int.n_hop = 0;
+		ca->cached_int.n_hop = 0;
 	}
 
 	return NULL;
@@ -224,8 +238,8 @@ static const struct powertcp_int *get_int(struct sock *sk,
 
 static const struct powertcp_int *get_prev_int(struct sock *sk)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
-	struct powertcp_int *prev_int = &ca->ptcp.prev_int;
+	struct ptcp_powertcp *ca = inet_csk_ca(sk);
+	struct powertcp_int *prev_int = &ca->prev_int;
 	/* With TCP-INT, the difference in tx_bytes since last ACK is already
 	 * estimated in get_int(). The previous value must be 0 so
 	 * ptcp_norm_power() does not calculate a second difference with a value
@@ -489,8 +503,8 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 
 static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
-	struct powertcp_int *prev_int = &ca->ptcp.prev_int;
+	struct ptcp_powertcp *ca = inet_csk_ca(sk);
+	struct powertcp_int *prev_int = &ca->prev_int;
 	prev_int->path_id = 0;
 
 	reset(sk, ev);
@@ -499,9 +513,9 @@ static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			    unsigned long p_smooth)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct ptcp_powertcp *ca = inet_csk_ca(sk);
 
-	ca->ptcp.prev_int = ca->ptcp.cached_int;
+	ca->prev_int = ca->cached_int;
 
 	return update_old(sk, p_smooth);
 }
@@ -518,13 +532,13 @@ static unsigned long
 rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 		   struct powertcp_trace_event *trace_event)
 {
-	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long dt, rtt_grad, p_norm, delta_t;
 	unsigned long p_smooth = ca->p_smooth;
 	unsigned long rtt_us;
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return p_smooth > 0 ? p_smooth : power_scale;
 	}
 
@@ -532,12 +546,11 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = tp->tcp_mstamp - ca->rttptcp.t_prev;
+	dt = tp->tcp_mstamp - ca->t_prev;
 	dt = max(dt, 1UL);
 	delta_t = min(dt, ca->base_rtt);
 	/* Limiting rtt_grad to non-negative values. */
-	rtt_grad = power_scale *
-		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
+	rtt_grad = power_scale * (rtt_us - min(ca->prev_rtt_us, rtt_us)) / dt;
 	p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
@@ -557,7 +570,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 
 static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	reset(sk, ev);
@@ -566,29 +579,29 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 	if (ev == CA_EVENT_CWND_RESTART) {
 		// TODO: Evaluate if it actually improves performance of the algorithm
 		// to reset those two values only on CA_EVENT_CWND_RESTART:
-		ca->rttptcp.last_updated = tp->snd_nxt;
-		ca->rttptcp.prev_rtt_us = tp->srtt_us >> 3;
+		ca->last_updated = tp->snd_nxt;
+		ca->prev_rtt_us = tp->srtt_us >> 3;
 	}
 
-	ca->rttptcp.t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_mstamp;
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			       unsigned long p_smooth)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return false;
 	}
 
 	update_old(sk, p_smooth);
 
-	ca->rttptcp.last_updated = tp->snd_nxt;
-	ca->rttptcp.prev_rtt_us = get_rtt(sk, rs);
+	ca->last_updated = tp->snd_nxt;
+	ca->prev_rtt_us = get_rtt(sk, rs);
 	// TODO: There are multiple timestamps available here. Is there a better one?
-	ca->rttptcp.t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_mstamp;
 
 	return true;
 }
@@ -598,10 +611,10 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 		      unsigned long norm_power,
 		      struct powertcp_trace_event *trace_event)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return ca->snd_cwnd;
 	}
 

@@ -412,8 +412,8 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
 #if 0
-	struct powertcp *ca = inet_csk_ca(sk);
-	struct powertcp_int *prev_int = &ca->ptcp.prev_int;
+	struct ptcp_powertcp *ca = inet_csk_ca(sk);
+	struct powertcp_int *prev_int = &ca->prev_int;
 	prev_int->path_id = 0;
 #endif
 
@@ -437,13 +437,13 @@ static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 static unsigned long rttptcp_norm_power(const struct sock *sk,
 					const struct rate_sample *rs)
 {
-	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long dt, rtt_grad, p_norm, delta_t;
 	unsigned long p_smooth = ca->p_smooth;
 	unsigned long rtt_us;
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return p_smooth > 0 ? p_smooth : power_scale;
 	}
 
@@ -451,12 +451,11 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = tp->tcp_mstamp - ca->rttptcp.t_prev;
+	dt = tp->tcp_mstamp - ca->t_prev;
 	dt = max(dt, 1UL);
 	delta_t = min(dt, ca->base_rtt);
 	/* Limiting rtt_grad to non-negative values. */
-	rtt_grad = power_scale *
-		   (rtt_us - min(ca->rttptcp.prev_rtt_us, rtt_us)) / dt;
+	rtt_grad = power_scale * (rtt_us - min(ca->prev_rtt_us, rtt_us)) / dt;
 	p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
@@ -473,7 +472,7 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 
 static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	reset(sk, ev);
@@ -482,29 +481,29 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 	if (ev == CA_EVENT_CWND_RESTART) {
 		// TODO: Evaluate if it actually improves performance of the algorithm
 		// to reset those two values only on CA_EVENT_CWND_RESTART:
-		ca->rttptcp.last_updated = tp->snd_nxt;
-		ca->rttptcp.prev_rtt_us = tp->srtt_us >> 3;
+		ca->last_updated = tp->snd_nxt;
+		ca->prev_rtt_us = tp->srtt_us >> 3;
 	}
 
-	ca->rttptcp.t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_mstamp;
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 			       unsigned long p_smooth)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return false;
 	}
 
 	update_old(sk, p_smooth);
 
-	ca->rttptcp.last_updated = tp->snd_nxt;
-	ca->rttptcp.prev_rtt_us = get_rtt(sk, rs);
+	ca->last_updated = tp->snd_nxt;
+	ca->prev_rtt_us = get_rtt(sk, rs);
 	// TODO: There are multiple timestamps available here. Is there a better one?
-	ca->rttptcp.t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_mstamp;
 
 	return true;
 }
@@ -513,10 +512,10 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 					   unsigned long cwnd_old,
 					   unsigned long norm_power)
 {
-	struct powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	if (before(tp->snd_una, ca->rttptcp.last_updated)) {
+	if (before(tp->snd_una, ca->last_updated)) {
 		return ca->snd_cwnd;
 	}
 
@@ -541,8 +540,6 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 	void powertcp_##func_prefix##_init(struct sock *sk)                    \
 	{                                                                      \
 		struct powertcp *ca = inet_csk_ca(sk);                         \
-                                                                               \
-		memset(&ca->func_prefix, 0, sizeof(ca->func_prefix));          \
                                                                                \
 		ca->base_rtt = ULONG_MAX;                                      \
 		ca->beta = beta < 0 ? ULONG_MAX : beta;                        \
