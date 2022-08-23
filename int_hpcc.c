@@ -151,7 +151,7 @@ static unsigned int ptcp_nf_hook(void *priv, struct sk_buff *skb,
 				 const struct nf_hook_state *state)
 {
 	struct sock *sk = state->sk;
-	struct inet_connection_sock *icsk = inet_csk(sk);
+	const struct inet_connection_sock *icsk = inet_csk(sk);
 
 	const unsigned char *ptr;
 	const struct tcphdr *th;
