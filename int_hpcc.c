@@ -87,6 +87,11 @@ union hpcc_int_head_word {
 	u16 word;
 };
 
+/* TODO: Settle on values for the 4-bit bandwidth field in the TCP option. */
+enum hpcc_port_speed {
+	HPCC_PORT_SPEED_TODO = 0,
+};
+
 static const struct powertcp_int *get_int(struct sock *sk,
 					  const struct powertcp_int *prev_int)
 {
