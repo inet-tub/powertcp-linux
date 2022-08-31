@@ -605,7 +605,6 @@ static u32 powertcp_ssthresh(struct sock *sk)
 static u32 powertcp_undo_cwnd(struct sock *sk)
 {
 	/* Never undo after a loss. */
-	// TODO: Or do we?
 	return tcp_sk(sk)->snd_cwnd;
 }
 
