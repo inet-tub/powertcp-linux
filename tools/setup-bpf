@@ -28,4 +28,4 @@ sudo ./bpf/powertcp register "$@"
 
 echo $$ | sudo tee -a /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
-sudo screen ${session:+-S "$session" "$repo_dir/tools/screen/$session.screen"}
+sudo screen ${session:+-S "$session" -c "$repo_dir/tools/screen/$session.screen"}
