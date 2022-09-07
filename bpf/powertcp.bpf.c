@@ -406,20 +406,18 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		const struct powertcp_hop_int *hop_int = &this_int->hops[i];
 		const struct powertcp_hop_int *prev_hop_int =
 			&prev_int->hops[i];
-		unsigned long dt = max(hop_int->ts - prev_hop_int->ts, 1ul);
-		unsigned long queue_grad =
-			hop_int->qlen > prev_hop_int->qlen ?
-				      power_scale * USEC_PER_SEC *
-					(hop_int->qlen - prev_hop_int->qlen) /
-					dt :
+		unsigned long dt = max(hop_int->ts - prev_hop_int->ts, 1u);
+		long queue_diff =
+			hop_int->qlen > 0 ?
+				      (long)hop_int->qlen - (long)prev_hop_int->qlen :
 				      0;
-		unsigned long rate =
-			power_scale * USEC_PER_SEC *
-			(hop_int->tx_bytes - prev_hop_int->tx_bytes) / dt;
+		long tx_bytes_diff =
+			(long)hop_int->tx_bytes - (long)prev_hop_int->tx_bytes;
 		/* The variable name "current" instead of lambda would conflict with a
 		 * macro of the same name in asm-generic/current.h.
 		 */
-		unsigned long lambda = max(1ul, queue_grad + rate);
+		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
+				       power_scale * (USEC_PER_SEC / dt);
 		unsigned long bdp =
 			hop_int->bandwidth * ca->base_rtt / USEC_PER_SEC;
 		unsigned long voltage = hop_int->qlen + bdp;
