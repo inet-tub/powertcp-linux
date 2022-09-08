@@ -8,9 +8,9 @@
 set -eu
 
 repo_dir=${0%/*}/..
-session=${1-}
+session=$1
 
-[ $# -eq 0 ] || shift
+shift
 
 if [ ! -d "$repo_dir/tools" ]; then
 	echo "must be called from within the repository" >&2
@@ -28,4 +28,4 @@ sudo ./bpf/powertcp register "$@"
 
 echo $$ | sudo tee -a /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
-sudo screen ${session:+-S "$session" -c "$repo_dir/tools/screen/$session.screen"}
+sudo screen -S "$session.$USER" -c "$repo_dir/tools/screen/$session.screen"
