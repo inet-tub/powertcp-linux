@@ -403,7 +403,12 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 
 static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 {
-	/* TODO: Anything special to do here for this variant? */
+#if 0
+	struct powertcp *ca = inet_csk_ca(sk);
+	struct powertcp_int *prev_int = &ca->ptcp.prev_int;
+	prev_int->path_id = 0;
+#endif
+
 	reset(sk, ev);
 }
 
