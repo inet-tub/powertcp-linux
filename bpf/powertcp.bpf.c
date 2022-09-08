@@ -36,7 +36,7 @@ struct old_cwnd {
 };
 
 struct powertcp_hop_int {
-	__u32 bandwidth;
+	__u32 bandwidth; /* in MByte/s */
 	__u32 ts;
 	__u32 tx_bytes;
 	__u32 qlen;
@@ -167,8 +167,7 @@ static const struct powertcp_int *get_int(struct sock *sk,
 		bpf_sk_storage_get(&map_tcp_int_state, sk, NULL, 0);
 
 	if (tint) {
-		__u32 bandwidth = BITS_TO_BYTES(MEGA) *
-				  hop_bw; /* Saving one instruction here :-) */
+		__u32 bandwidth = BITS_TO_BYTES(hop_bw);
 		__u32 dt = !prev_int ? tp->srtt_us :
 					     (tp->tcp_mstamp - prev_int->hops[0].ts);
 
@@ -184,7 +183,7 @@ static const struct powertcp_int *get_int(struct sock *sk,
 		ca->ptcp.cached_int.hops[0].ts = tp->tcp_mstamp;
 		/* In lack of a tx_bytes value, we estimate it here: */
 		ca->ptcp.cached_int.hops[0].tx_bytes =
-			bandwidth * tint->util / 100 * dt / USEC_PER_SEC;
+			bandwidth * tint->util / 100 * dt;
 
 		return &ca->ptcp.cached_int;
 	} else {
@@ -418,16 +417,15 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 */
 		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
 				       (USEC_PER_SEC / dt);
-		unsigned long bdp =
-			hop_int->bandwidth * ca->base_rtt / USEC_PER_SEC;
+		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
 		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
 		 * interfaces:
 		 */
 		unsigned long equilibrium = max(
-			(unsigned long)hop_int->bandwidth / USEC_PER_SEC *
-				hop_int->bandwidth / power_scale * ca->base_rtt,
+			(unsigned long)hop_int->bandwidth * hop_int->bandwidth /
+				power_scale * MEGA * ca->base_rtt,
 			1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm) {

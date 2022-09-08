@@ -42,7 +42,7 @@ struct old_cwnd {
 enum { max_n_hops = 1 };
 
 struct powertcp_hop_int {
-	u32 bandwidth;
+	u32 bandwidth; /* in MByte/s */
 	u32 ts;
 	u32 tx_bytes;
 	u32 qlen;
@@ -376,16 +376,15 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 */
 		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
 				       (USEC_PER_SEC / dt);
-		unsigned long bdp =
-			hop_int->bandwidth * ca->base_rtt / USEC_PER_SEC;
+		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
 		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
 		 * interfaces:
 		 */
 		unsigned long equilibrium = max(
-			(unsigned long)hop_int->bandwidth / USEC_PER_SEC *
-				hop_int->bandwidth / power_scale * ca->base_rtt,
+			(unsigned long)hop_int->bandwidth * hop_int->bandwidth /
+				power_scale * MEGA * ca->base_rtt,
 			1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm) {
