@@ -375,7 +375,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 * macro of the same name in asm-generic/current.h.
 		 */
 		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
-				       power_scale * (USEC_PER_SEC / dt);
+				       (USEC_PER_SEC / dt);
 		unsigned long bdp =
 			hop_int->bandwidth * ca->base_rtt / USEC_PER_SEC;
 		unsigned long voltage = hop_int->qlen + bdp;
@@ -383,10 +383,10 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
 		 * interfaces:
 		 */
-		unsigned long equilibrium =
-			max(hop_int->bandwidth / USEC_PER_SEC *
-				    hop_int->bandwidth * ca->base_rtt,
-			    1ul);
+		unsigned long equilibrium = max(
+			(unsigned long)hop_int->bandwidth / USEC_PER_SEC *
+				hop_int->bandwidth / power_scale * ca->base_rtt,
+			1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm) {
 			p_norm = hop_p_norm;
