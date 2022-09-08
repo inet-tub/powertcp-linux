@@ -420,9 +420,6 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
-		/* NOTE: equilibrium will overflow for switches with above-100 GBit/s
-		 * interfaces:
-		 */
 		unsigned long equilibrium = max(
 			(unsigned long)hop_int->bandwidth * hop_int->bandwidth /
 				power_scale * MEGA * ca->base_rtt,
