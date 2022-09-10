@@ -298,7 +298,7 @@ static void usage(const char *prog)
 		"\n"
 		"EXAMPLE\n"
 		"\n"
-		"   $ %1$s register expected_flows=1\n"
+		"   # %1$s register expected_flows=1\n"
 		"\n",
 		prog);
 }
