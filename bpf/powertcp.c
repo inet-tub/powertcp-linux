@@ -276,7 +276,8 @@ static int do_unregister(void)
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"Usage: %1$s register|unregister [PARAMETER...]\n"
+		"Usage: %1$s register [PARAMETER...]\n"
+		"       %1$s unregister\n"
 		"\n"
 		"COMMANDS\n"
 		"   register\n"
