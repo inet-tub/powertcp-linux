@@ -273,9 +273,9 @@ static int do_unregister(void)
 	return r;
 }
 
-static void usage(const char *prog)
+static void usage(const char *prog, FILE *outfile)
 {
-	fprintf(stderr,
+	fprintf(outfile,
 		"Usage: %1$s [OPTION...] register [PARAMETER...]\n"
 		"       %1$s unregister\n"
 		"\n"
@@ -314,19 +314,22 @@ int main(int argc, char *argv[])
 	bool force = false;
 
 	int opt;
-	while (-1 != (opt = getopt(argc, argv, "f"))) {
+	while (-1 != (opt = getopt(argc, argv, "fh"))) {
 		switch (opt) {
 		case 'f':
 			force = true;
 			break;
+		case 'h':
+			usage(argv[0], stdout);
+			return EXIT_SUCCESS;
 		default:
-			usage(argv[0]);
+			usage(argv[0], stderr);
 			return EXIT_FAILURE;
 		}
 	}
 
 	if (optind >= argc) {
-		usage(argv[0]);
+		usage(argv[0], stderr);
 		return EXIT_FAILURE;
 	}
 
@@ -344,6 +347,6 @@ int main(int argc, char *argv[])
 		return do_unregister();
 	}
 
-	usage(argv[0]);
+	usage(argv[0], stderr);
 	return EXIT_FAILURE;
 }
