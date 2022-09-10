@@ -276,7 +276,7 @@ static int do_unregister(void)
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-		"Usage: %1$s register [PARAMETER...]\n"
+		"Usage: %1$s [OPTION...] register [PARAMETER...]\n"
 		"       %1$s unregister\n"
 		"\n"
 		"COMMANDS\n"
@@ -286,6 +286,11 @@ static void usage(const char *prog)
 		"\n"
 		"   unregister\n"
 		"      Unregister the PowerTCP eBPF programs.\n"
+		"\n"
+		"OPTIONS\n"
+		"   -f\n"
+		"      Force an unregister before a register so parameters can be set to\n"
+		"      new values.\n"
 		"\n"
 		"PARAMETERS\n"
 		"   The following parameters of the PowerTCP algorithm can be set with the\n"
@@ -306,15 +311,32 @@ static void usage(const char *prog)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 2) {
+	bool force = false;
+
+	int opt;
+	while (-1 != (opt = getopt(argc, argv, "f"))) {
+		switch (opt) {
+		case 'f':
+			force = true;
+			break;
+		default:
+			usage(argv[0]);
+			return EXIT_FAILURE;
+		}
+	}
+
+	if (optind >= argc) {
 		usage(argv[0]);
 		return EXIT_FAILURE;
 	}
 
-	if (0 == strcmp("register", argv[1])) {
-		return do_register(argc - 2, argv + 2);
-	} else if (0 == strcmp("unregister", argv[1])) {
-		if (argc > 2) {
+	if (0 == strcmp("register", argv[optind])) {
+		if (force) {
+			do_unregister();
+		}
+		return do_register(argc - optind - 1, argv + optind + 1);
+	} else if (0 == strcmp("unregister", argv[optind])) {
+		if (argc - optind > 2) {
 			fprintf(stderr,
 				"unexpected argument(s) after 'unregister'\n");
 			return EXIT_FAILURE;

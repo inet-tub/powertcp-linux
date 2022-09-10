@@ -40,7 +40,7 @@ values in the units specified above.
 Parameters can be set to different values from within the screen session
 without calling `setup-bpf`
 ```console
-root@host:PowerTCP-Kernel-Module# ./bpf/powertcp unregister; ./bpf/powertcp register base_rtt=100 hop_bw=25000 host_bw=25000
+root@host:PowerTCP-Kernel-Module# ./bpf/powertcp -f register base_rtt=100 hop_bw=25000 host_bw=25000
 ```
 or `setup-module` again
 ```console
