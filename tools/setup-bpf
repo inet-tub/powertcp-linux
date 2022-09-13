@@ -24,6 +24,7 @@ sudo ./bpf/powertcp unregister || :
 sudo ./bpf/tcp-int/code/src/tools/tcp_int unload || :
 
 sudo ./bpf/tcp-int/code/src/tools/tcp_int load
+sudo ./bpf/tcp-int/code/src/tools/tcp_int enable
 sudo ./bpf/powertcp register "$@"
 
 echo $$ | sudo tee -a /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
