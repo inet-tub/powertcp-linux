@@ -1,0 +1,43 @@
+#!/bin/sh
+set -u
+
+if [ $# -lt 1 ]; then
+	printf "missing interface name\n" >&2
+	exit 2
+fi
+
+iface=$1
+
+tuned-adm profile network-latency
+
+sysctl -qw \
+	vm.overcommit_memory=1 \
+	net.core.busy_poll=50000 \
+	net.core.busy_read=50000 \
+	net.core.somaxconn=4096 \
+	net.core.netdev_max_backlog=8192 \
+	net.ipv4.tcp_max_syn_backlog=16384 \
+	net.core.rmem_max=16777216 \
+	net.core.wmem_max=16777216 \
+	net.ipv4.tcp_mem="764688 1019584 16777216" \
+	net.ipv4.tcp_rmem="8192 87380 16777216" \
+	net.ipv4.tcp_wmem="8192 65536 16777216"
+
+sysctl -qw \
+	net.ipv4.tcp_sack=0 \
+	net.ipv4.tcp_timestamps=0
+
+ethtool -G "$iface" \
+	tx 8160 \
+	rx 8160
+
+ethtool -K "$iface" \
+	gso on \
+	lro on \
+	rx on \
+	tso on \
+	tx on
+
+ethtool -C "$iface" \
+	adaptive-rx off rx-usecs 0 \
+	adaptive-tx off tx-usecs 10
