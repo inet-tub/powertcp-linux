@@ -86,6 +86,8 @@ const volatile long gamma = default_gamma;
 const volatile long hop_bw = default_hop_bw; /* Mbit/s */
 const volatile long host_bw = fallback_host_bw; /* Mbit/s */
 
+extern __u32 LINUX_KERNEL_VERSION __kconfig;
+
 static void clear_old_cwnds(struct sock *sk)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
@@ -220,25 +222,30 @@ static unsigned long get_rtt(const struct sock *sk,
 
 static void require_pacing(struct sock *sk)
 {
-	/* TODO: Once
-	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/
-	 * has arrived in a released kernel, we can replace the
-	 * HAVE_WRITABLE_SK_PACING flag with a look at the kernel version.
+	/* When using a kernel version before 6.0 that is manually patched with
+	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/,
+	 * writing to sk_pacing_* can be enabled with HAVE_WRITABLE_SK_PACING=1
+	 * passed to make.
 	 */
 #if HAVE_WRITABLE_SK_PACING
-	/* TODO: May have to patch the kernel to be able to set sk_pacing_status from
-	 * a BPF TCP CC. */
-	/* We do want sk_pacing_rate to be respected: */
-#if __clang_major__ >= 12
-	// cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
-	__sync_bool_compare_and_swap(&sk->sk_pacing_status, SK_PACING_NONE,
-				     SK_PACING_NEEDED);
+	bool have_writable_sk_pacing = true;
 #else
-	if (sk->sk_pacing_status == SK_PACING_NONE) {
-		sk->sk_pacing_status = SK_PACING_NEEDED;
+	bool have_writable_sk_pacing =
+		LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0);
+#endif
+
+	if (have_writable_sk_pacing) {
+		/* We do want sk_pacing_rate to be respected: */
+#if __clang_major__ >= 12
+		// cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
+		__sync_bool_compare_and_swap(&sk->sk_pacing_status,
+					     SK_PACING_NONE, SK_PACING_NEEDED);
+#else
+		if (sk->sk_pacing_status == SK_PACING_NONE) {
+			sk->sk_pacing_status = SK_PACING_NEEDED;
+		}
+#endif
 	}
-#endif
-#endif
 }
 
 static void set_cwnd(struct sock *sk, unsigned long cwnd)
@@ -258,22 +265,29 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd)
 /* Set the socket pacing rate (bytes per second). */
 static void set_rate(struct sock *sk, unsigned long rate)
 {
-	/* TODO: Once
-	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/
-	 * has arrived in a released kernel, we can replace the
-	 * HAVE_WRITABLE_SK_PACING flag with a look at the kernel version.
+	/* When using a kernel version before 6.0 that is manually patched with
+	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/,
+	 * writing to sk_pacing_* can be enabled with HAVE_WRITABLE_SK_PACING=1
+	 * passed to make.
 	 */
 #if HAVE_WRITABLE_SK_PACING
-	/* TODO: May have to patch the kernel to be able to set sk_pacing_rate from
-	 * a BPF TCP CC. */
-	sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+	bool have_writable_sk_pacing = true;
 #else
-	/* bpf_setsockopt() only accepts an int for this option: */
-	int irate = ~0U;
-	bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate, sizeof(irate));
-	irate = rate;
-	bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate, sizeof(irate));
+	bool have_writable_sk_pacing =
+		LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0);
 #endif
+
+	if (have_writable_sk_pacing) {
+		sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
+	} else {
+		/* bpf_setsockopt() only accepts an int for this option: */
+		int irate = ~0U;
+		bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate,
+			       sizeof(irate));
+		irate = rate;
+		bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate,
+			       sizeof(irate));
+	}
 }
 
 /* Look for the base (~= minimum) RTT (in us). */
