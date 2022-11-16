@@ -25,7 +25,7 @@ ARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 
 BPF_CFLAGS := -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 		  $(shell pkg-config --cflags libbpf) -c -O2 \
-		  -mcpu=probe -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING) \
+		  -mcpu=v3 -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING) \
 		  -I.. -I$(TCP_INT_DIR)/include
 CFLAGS := -O3 -Wall -Wextra $(shell pkg-config --cflags libbpf) -I.. -I$(TCP_INT_DIR)/src/tools
 DEP_CFLAGS := -M -MG -I.. -I$(TCP_INT_DIR)/include
