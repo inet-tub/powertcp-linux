@@ -32,3 +32,5 @@ congestion control algorithms with the provided `powertcp` tool:
 ```console
 root@host:PowerTCP-Kernel-Module/bpf# ./powertcp register
 ```
+
+The tool also sets given algorithm parameters. See `./powertcp -h` for details.
