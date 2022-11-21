@@ -33,6 +33,20 @@
 
 namespace
 {
+template <typename T, void (*DeleteFunc)(T *)> struct delete_func_wrapper {
+	void operator()(T *ptr) const noexcept
+	{
+		DeleteFunc(ptr);
+	}
+};
+
+template <typename T, void (*DeleteFunc)(T *)>
+using ptr_with_delete_func =
+	std::unique_ptr<T, delete_func_wrapper<T, DeleteFunc> >;
+
+using powertcp_bpf_ptr =
+	ptr_with_delete_func<powertcp_bpf, powertcp_bpf__destroy>;
+
 struct powertcp_param_double {
 	std::size_t rodata_off;
 	double scale;
@@ -241,8 +255,7 @@ void delete_struct_ops(const char *map_name)
 
 void do_register(int argc, char *argv[])
 {
-	auto skel = std::unique_ptr<powertcp_bpf, void (*)(powertcp_bpf *)>(
-		powertcp_bpf__open(), powertcp_bpf__destroy);
+	auto skel = powertcp_bpf_ptr{ powertcp_bpf__open() };
 	if (!skel) {
 		throw std::system_error(errno, std::generic_category(), "open");
 	}
