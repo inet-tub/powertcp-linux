@@ -15,6 +15,8 @@
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
 #include <cerrno>
+#include <csignal>
+#include <filesystem>
 #include <linux/bpf.h>
 #include <linux/types.h>
 #include <cstddef>
@@ -30,6 +32,8 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
+
+#include "powertcp.bpf.h"
 
 namespace
 {
@@ -47,6 +51,10 @@ using ptr_with_delete_func =
 using powertcp_bpf_ptr =
 	ptr_with_delete_func<powertcp_bpf, powertcp_bpf__destroy>;
 
+struct powertcp_param_bool {
+	std::size_t rodata_off;
+};
+
 struct powertcp_param_double {
 	std::size_t rodata_off;
 	double scale;
@@ -56,11 +64,17 @@ struct powertcp_param_long {
 	std::size_t rodata_off;
 };
 
-using powertcp_param = std::variant<powertcp_param_double, powertcp_param_long>;
+using powertcp_param = std::variant<powertcp_param_bool, powertcp_param_double,
+				    powertcp_param_long>;
 
 struct powertcp_param_visitor {
 	const std::string &str;
 	powertcp_bpf::powertcp_bpf__rodata *rodata;
+
+	void operator()(const powertcp_param_bool &par) const
+	{
+		assign_param(true, rodata, par.rodata_off);
+	}
 
 	void operator()(const powertcp_param_double &par) const
 	{
@@ -86,6 +100,8 @@ struct powertcp_param_visitor {
 		rodata_param = val;
 	}
 };
+
+using ring_buffer_ptr = ptr_with_delete_func<ring_buffer, ring_buffer__free>;
 
 class unique_fd {
     public:
@@ -151,8 +167,18 @@ const std::unordered_map<std::string, powertcp_param> params = {
 	  powertcp_param_double{ POWERTCP_RODATA_OFFSET(gamma), gamma_scale } },
 	{ "hop_bw", powertcp_param_long{ POWERTCP_RODATA_OFFSET(hop_bw) } },
 	{ "host_bw", powertcp_param_long{ POWERTCP_RODATA_OFFSET(host_bw) } },
+	{ "tracing", powertcp_param_bool{ POWERTCP_RODATA_OFFSET(tracing) } },
 };
 #undef POWERTCP_RODATA_OFFSET
+
+const std::filesystem::path powertcp_pin_dir = "/sys/fs/bpf/powertcp";
+
+const std::unordered_map<std::string, std::filesystem::path>
+	powertcp_pin_paths = {
+		{ "trace_events", powertcp_pin_dir / "trace_events" },
+	};
+
+volatile std::sig_atomic_t running = true;
 
 void parse_param(std::string param_arg,
 		 powertcp_bpf::powertcp_bpf__rodata *rodata)
@@ -293,29 +319,119 @@ void do_register(int argc, char *argv[])
 
 	attach_struct_ops(skel->maps.powertcp);
 	attach_struct_ops(skel->maps.rttpowertcp);
+
+	/* struct_ops program maps are "pinned"/kept alive in their own way (see
+	 * the comment in attach_struct_ops()), we only want to pin other maps
+	 * here:
+	 */
+	auto *trace_map =
+		bpf_object__find_map_by_name(skel->obj, "trace_events");
+	if (bpf_map__pin(trace_map,
+			 powertcp_pin_paths.at("trace_events").c_str())) {
+		throw std::system_error(errno, std::generic_category(),
+					"bpf_object__pin");
+	}
+}
+
+int handle_trace_event(void * /* ctx */, void *data, std::size_t /* data_sz */)
+{
+	/* TODO: If it seems appropriate later, merge handle_trace_event() and
+	 * handle_trace_event_csv() and just use two different format strings.
+	 */
+	const powertcp_trace_event &ev =
+		*static_cast<powertcp_trace_event *>(data);
+
+	std::printf("%u\t%u\t%u\t%lu\t%0f\t%ld\n", ev.time, ev.sk_hash, ev.cwnd,
+		    ev.rate, static_cast<double>(ev.p_norm) / power_scale,
+		    ev.qlen);
+
+	return 0;
+}
+
+int handle_trace_event_csv(void * /* ctx */, void *data,
+			   std::size_t /* data_sz */)
+{
+	/* TODO: If it seems appropriate later, merge handle_trace_event() and
+	 * handle_trace_event_csv() and just use two different format strings.
+	 */
+	const auto &ev = *static_cast<powertcp_trace_event *>(data);
+
+	std::printf("%u,%u,%u,%lu,%0f,%ld\n", ev.time, ev.sk_hash, ev.cwnd,
+		    ev.rate, static_cast<double>(ev.p_norm) / power_scale,
+		    ev.qlen);
+
+	return 0;
+}
+
+void do_trace(bool output_csv)
+{
+	auto map_fd = unique_fd{ bpf_obj_get(
+		powertcp_pin_paths.at("trace_events").c_str()) };
+	if (!map_fd) {
+		throw std::system_error(-map_fd.get(), std::generic_category(),
+					"bpf_obj_get");
+	}
+
+	auto handle_func =
+		output_csv ? handle_trace_event_csv : handle_trace_event;
+	auto ring_buf = ring_buffer_ptr{ ring_buffer__new(
+		map_fd.get(), handle_func, nullptr, nullptr) };
+	if (!ring_buf) {
+		throw std::system_error(errno, std::generic_category(),
+					"ring_buffer__new");
+	}
+
+	if (output_csv) {
+		std::printf("time,hash,cwnd,rate,p_norm,qlen\n");
+	} else {
+		std::printf(
+			"# Time\tSocket hash\tCWND (segments)\tRate (bytes/s)\tNorm. power\tQueue length (bytes)\n");
+	}
+
+	while (running) {
+		auto err = ring_buffer__poll(ring_buf.get(), 1000);
+		if (err == -EINTR) {
+			return;
+		} else if (err < 0) {
+			throw std::system_error(-err, std::generic_category(),
+						"ring_buffer__poll");
+		}
+	}
 }
 
 void do_unregister()
 {
 	delete_struct_ops("powertcp");
 	delete_struct_ops("rttpowertcp");
+	std::filesystem::remove_all(powertcp_pin_dir);
+}
+
+void handle_signal(int /* sig */)
+{
+	running = false;
 }
 
 void usage(const char *prog, FILE *outfile)
 {
 	fprintf(outfile,
 		"Usage: %1$s [OPTION...] register [PARAMETER...]\n"
-		"       %1$s unregister\n"
+		"       %1$s [OPTION...] trace | unregister\n"
 		"\n"
 		"COMMANDS\n"
 		"   register\n"
 		"      Register the PowerTCP eBPF programs, optionally setting algorithm\n"
 		"      parameters.\n"
 		"\n"
+		"   trace\n"
+		"      Trace the execution of the algorithm.\n"
+		"\n"
 		"   unregister\n"
 		"      Unregister the PowerTCP eBPF programs.\n"
 		"\n"
 		"OPTIONS\n"
+		"   -C\n"
+		"      Output traced values in CSV format.\n"
+		"\n"
 		"   -f\n"
 		"      Force an unregister before a register so parameters can be set to\n"
 		"      new values.\n"
@@ -330,6 +446,9 @@ void usage(const char *prog, FILE *outfile)
 		"    - hop_bw in Mbit/s\n"
 		"    - host_bw in Mbit/s\n"
 		"\n"
+		"   Passing the additional, value-less parameter \"tracing\" enables tracing\n"
+		"   the algorithm with trace command.\n"
+		"\n"
 		"EXAMPLE\n"
 		"\n"
 		"   # %1$s register expected_flows=1\n"
@@ -341,10 +460,14 @@ void usage(const char *prog, FILE *outfile)
 int main(int argc, char *argv[])
 {
 	bool force = false;
+	auto output_csv = false;
 
 	int opt;
-	while (-1 != (opt = getopt(argc, argv, "fh"))) {
+	while (-1 != (opt = getopt(argc, argv, "Cfh"))) {
 		switch (opt) {
+		case 'C':
+			output_csv = true;
+			break;
 		case 'f':
 			force = true;
 			break;
@@ -362,6 +485,14 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	struct sigaction sigact = {};
+	sigact.sa_handler = handle_signal;
+	sigact.sa_flags = SA_RESETHAND;
+	if (sigaction(SIGINT, &sigact, nullptr)) {
+		std::perror("sigaction");
+		return EXIT_FAILURE;
+	}
+
 	if (0 == strcmp("register", argv[optind])) {
 		if (force) {
 			try {
@@ -373,6 +504,12 @@ int main(int argc, char *argv[])
 
 		try {
 			do_register(argc - optind - 1, argv + optind + 1);
+		} catch (const std::exception &e) {
+			fprintf(stderr, "%s\n", e.what());
+		}
+	} else if (0 == strcmp("trace", argv[optind])) {
+		try {
+			do_trace(output_csv);
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
 		}

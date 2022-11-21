@@ -18,6 +18,8 @@
 
 #include "vmlinux.h"
 
+#include "powertcp.bpf.h"
+
 #include "tcp_int_common.h"
 #include "tcp_int_common.bpf.h"
 
@@ -85,8 +87,14 @@ const volatile long expected_flows = default_expected_flows;
 const volatile long gamma = default_gamma;
 const volatile long hop_bw = default_hop_bw; /* Mbit/s */
 const volatile long host_bw = fallback_host_bw; /* Mbit/s */
+const volatile bool tracing = false;
 
 extern __u32 LINUX_KERNEL_VERSION __kconfig;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 512 * 1024);
+} trace_events SEC(".maps");
 
 static void clear_old_cwnds(struct sock *sk)
 {
@@ -248,7 +256,8 @@ static void require_pacing(struct sock *sk)
 	}
 }
 
-static void set_cwnd(struct sock *sk, unsigned long cwnd)
+static void set_cwnd(struct sock *sk, unsigned long cwnd,
+		     struct powertcp_trace_event *trace_event)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -260,6 +269,10 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd)
 	cwnd /= cwnd_scale;
 	cwnd = min_t(unsigned long, cwnd, tp->snd_cwnd_clamp);
 	tp->snd_cwnd = max(1UL, cwnd);
+
+	if (tracing && trace_event) {
+		trace_event->cwnd = tp->snd_cwnd;
+	}
 }
 
 /* Set the socket pacing rate (bytes per second). */
@@ -355,7 +368,7 @@ static void reset(struct sock *sk, enum tcp_ca_event ev)
 		set_rate(sk, rate);
 		cwnd = cwnd_scale * rate * ca->base_rtt / tp->mss_cache /
 		       USEC_PER_SEC;
-		set_cwnd(sk, cwnd);
+		set_cwnd(sk, cwnd, NULL);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
 		ca->p_smooth = 0;
@@ -386,7 +399,8 @@ static bool update_old(struct sock *sk, unsigned long p_smooth)
 }
 
 static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
-				   unsigned long norm_power)
+				   unsigned long norm_power,
+				   struct powertcp_trace_event *trace_event)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	unsigned long cwnd;
@@ -396,12 +410,13 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 		    power_scale * cwnd_old / norm_power + ca->beta,
 		    ca->snd_cwnd);
 	cwnd = max(1UL, cwnd);
-	set_cwnd(sk, cwnd);
+	set_cwnd(sk, cwnd, trace_event);
 	return cwnd;
 }
 
 static unsigned long ptcp_norm_power(struct sock *sk,
-				     const struct rate_sample *rs)
+				     const struct rate_sample *rs,
+				     struct powertcp_trace_event *trace_event)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	unsigned long delta_t = 0;
@@ -445,6 +460,11 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		if (hop_p_norm > p_norm) {
 			p_norm = hop_p_norm;
 			delta_t = dt;
+
+			if (tracing && trace_event) {
+				trace_event->time = hop_int->ts;
+				trace_event->qlen = hop_int->qlen;
+			}
 		}
 	}
 
@@ -452,6 +472,10 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 	p_smooth = p_smooth == 0 ?
 				 p_norm :
 				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
+
+	if (tracing && trace_event) {
+		trace_event->p_norm = p_smooth;
+	}
 
 	return p_smooth;
 }
@@ -475,14 +499,17 @@ static bool ptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	return update_old(sk, p_smooth);
 }
 
-static unsigned long ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
-					unsigned long norm_power)
+static unsigned long
+ptcp_update_window(struct sock *sk, unsigned long cwnd_old,
+		   unsigned long norm_power,
+		   struct powertcp_trace_event *trace_event)
 {
-	return update_window(sk, cwnd_old, norm_power);
+	return update_window(sk, cwnd_old, norm_power, trace_event);
 }
 
-static unsigned long rttptcp_norm_power(const struct sock *sk,
-					const struct rate_sample *rs)
+static unsigned long
+rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
+		   struct powertcp_trace_event *trace_event)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -511,6 +538,11 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	p_smooth = p_smooth == 0 ?
 				 p_norm :
 				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
+
+	if (tracing && trace_event) {
+		trace_event->p_norm = p_smooth;
+		trace_event->time = tp->tcp_mstamp;
+	}
 
 	return p_smooth;
 }
@@ -553,9 +585,10 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	return true;
 }
 
-static unsigned long rttptcp_update_window(struct sock *sk,
-					   unsigned long cwnd_old,
-					   unsigned long norm_power)
+static unsigned long
+rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
+		      unsigned long norm_power,
+		      struct powertcp_trace_event *trace_event)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -564,7 +597,7 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		return ca->snd_cwnd;
 	}
 
-	return update_window(sk, cwnd_old, norm_power);
+	return update_window(sk, cwnd_old, norm_power, trace_event);
 }
 
 #define DEFINE_POWERTCP_VARIANT(func_prefix, cong_ops_name)                    \
@@ -611,18 +644,27 @@ static unsigned long rttptcp_update_window(struct sock *sk,
 		unsigned long norm_power;                                      \
 		unsigned long cwnd;                                            \
 		unsigned long rate;                                            \
+		struct powertcp_trace_event trace_event = {};                  \
                                                                                \
 		if (ca->host_bw == 0) {                                        \
 			return;                                                \
 		}                                                              \
                                                                                \
 		cwnd_old = get_cwnd(sk);                                       \
-		norm_power = func_prefix##_norm_power(sk, rs);                 \
-		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power);  \
+		norm_power = func_prefix##_norm_power(sk, rs, &trace_event);   \
+		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power,   \
+						   &trace_event);              \
 		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / ca->base_rtt /  \
 		       cwnd_scale;                                             \
 		set_rate(sk, rate);                                            \
 		func_prefix##_update_old(sk, rs, norm_power);                  \
+                                                                               \
+		if (tracing && trace_event.time != 0) {                        \
+			trace_event.rate = rate;                               \
+			trace_event.sk_hash = sk->__sk_common.skc_hash;        \
+			bpf_ringbuf_output(&trace_events, &trace_event,        \
+					   sizeof(trace_event), 0);            \
+		}                                                              \
 	}                                                                      \
                                                                                \
 	SEC(".struct_ops")                                                     \
