@@ -278,7 +278,7 @@ void do_register(int argc, char *argv[])
 	attach_struct_ops(skel->maps.rttpowertcp);
 }
 
-void do_unregister(void)
+void do_unregister()
 {
 	delete_struct_ops("powertcp");
 	delete_struct_ops("rttpowertcp");
