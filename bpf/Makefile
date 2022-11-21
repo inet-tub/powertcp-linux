@@ -23,13 +23,16 @@ ARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
     -e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ \
     -e s/riscv.*/riscv/)
 
+LIBBPF_CFLAGS := $(shell pkg-config --cflags libbpf)
+LIBBPF_LIBS := $(shell pkg-config --libs libbpf)
+
 BPF_CFLAGS := -g -target bpf -D__TARGET_ARCH_$(ARCH) \
-		  $(shell pkg-config --cflags libbpf) -c -O2 \
+		  $(LIBBPF_CFLAGS) -c -O2 \
 		  -mcpu=v3 -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING) \
 		  -I.. -I$(TCP_INT_DIR)/include
-CXXFLAGS := -std=gnu++17 -O3 -Wall -Wextra $(shell pkg-config --cflags libbpf) -I.. -I$(TCP_INT_DIR)/src/tools
+CXXFLAGS := -std=gnu++17 -O3 -Wall -Wextra $(LIBBPF_CFLAGS) -I.. -I$(TCP_INT_DIR)/src/tools
 DEP_CFLAGS := -M -MG -I.. -I$(TCP_INT_DIR)/include
-LDLIBS := $(shell pkg-config --libs libbpf)
+LDLIBS := $(LIBBPF_LIBS)
 
 .PHONY: all
 all: $(BPF_OBJS) $(PROGS)
