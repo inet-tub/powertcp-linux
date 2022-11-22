@@ -60,15 +60,30 @@ using powertcp_param = std::variant<powertcp_param_double, powertcp_param_long>;
 
 struct powertcp_param_visitor {
 	const std::string &str;
+	powertcp_bpf::powertcp_bpf__rodata *rodata;
 
-	long operator()(const powertcp_param_double &par) const
+	void operator()(const powertcp_param_double &par) const
 	{
-		return std::stod(str) * par.scale;
+		assign_param(std::stod(str) * par.scale, rodata,
+			     par.rodata_off);
 	}
 
-	long operator()(const powertcp_param_long &) const
+	void operator()(const powertcp_param_long &par) const
 	{
-		return std::stol(str);
+		assign_param(std::stol(str), rodata, par.rodata_off);
+	}
+
+	template <typename T>
+	void assign_param(T val, powertcp_bpf::powertcp_bpf__rodata *rodata,
+			  std::size_t rodata_off) const
+	{
+		assert(rodata != nullptr);
+
+		auto &rodata_param = *reinterpret_cast<T *>(
+			reinterpret_cast<char *>(rodata) + rodata_off);
+		/* TODO: Maybe check if a value is in the allowed range. Or do that in
+		 * the BPF code. */
+		rodata_param = val;
 	}
 };
 
@@ -157,10 +172,9 @@ void parse_param(std::string param_arg,
 	std::string value_tok;
 	std::getline(iss, value_tok, '=');
 
-	long val;
 	try {
-		val = std::visit(powertcp_param_visitor{ value_tok },
-				 param_iter->second);
+		std::visit(powertcp_param_visitor{ value_tok, rodata },
+			   param_iter->second);
 	} catch (const std::invalid_argument &) {
 		std::ostringstream oss;
 		oss << "Invalid value '" << value_tok << "' for parameter "
@@ -172,16 +186,6 @@ void parse_param(std::string param_arg,
 		    << name_tok << ": out of range";
 		throw std::out_of_range(oss.str());
 	}
-
-	assert(rodata != nullptr);
-	std::size_t rodata_off = std::visit(
-		[](auto &&p) { return p.rodata_off; }, param_iter->second);
-	long *rodata_param = reinterpret_cast<long *>(
-		reinterpret_cast<char *>(rodata) + rodata_off);
-	/* TODO: Maybe check if a value is in the allowed range. Or do that in the
-	 * BPF code.
-	 */
-	*rodata_param = val;
 }
 
 void attach_struct_ops(bpf_map *struct_ops)
