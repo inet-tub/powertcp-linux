@@ -153,8 +153,12 @@ def main():
 
     df = pd.read_csv(args.csv_file)
     df["time"] -= df["time"].min()
-    df["p_norm"] /= df["power_scale"]
-    df = df.drop(columns="power_scale")
+    try:
+        df["p_norm"] = df["p_norm_scaled"] / df["power_scale"]
+    except KeyError:
+        pass
+    else:
+        df = df.drop(columns=["p_norm_scaled", "power_scale"])
 
     if args.info:
         pd.options.display.float_format = "{:06.4f}".format

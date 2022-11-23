@@ -4,7 +4,7 @@
 
 BEGIN
 {
-	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate,power_scale,p_norm,ev");
+	print("time,hash,ack_seq,base_rtt,beta,cwnd,rate,power_scale,p_norm_scaled,ev");
 }
 
 tracepoint:powertcp:new_ack
