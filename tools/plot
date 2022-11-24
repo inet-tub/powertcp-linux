@@ -20,6 +20,7 @@ COLUMNS = (
     "ev",
     "hash",
     "p_norm",
+    "qlen",
     "rate",
     "time",
 )
@@ -35,6 +36,7 @@ LABELS = {
     "cwnd": "Congestion window",
     "ev": "Resets",
     "p_norm": "Normalized power",
+    "qlen": "Queue length",
     "rate": "Transmission rate",
     "time": "Time",
 }
@@ -61,6 +63,7 @@ UNITS = {
     "cwnd": ("bytes",),
     "ev": (None,),
     "p_norm": ("bit^2/s",),
+    "qlen": ("bytes"),
     "rate": ("bytes/s", "bit/s"),
     "time": ("us", "ms", "s"),
 }
