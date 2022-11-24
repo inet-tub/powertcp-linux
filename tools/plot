@@ -69,7 +69,7 @@ UNITS = {
 }
 
 
-class ListStrToDict:
+class DictStrArg:
     def __init__(self, value_type):
         self._value_type = value_type
 
@@ -144,11 +144,11 @@ def main():
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
 
     if not early_args.info:
-        argparser.add_argument("--fmt", default={}, type=ListStrToDict(str))
-        argparser.add_argument("--max", default={}, type=ListStrToDict(float))
-        argparser.add_argument("--min", default={}, type=ListStrToDict(float))
+        argparser.add_argument("--fmt", default={}, type=DictStrArg(str))
+        argparser.add_argument("--max", default={}, type=DictStrArg(float))
+        argparser.add_argument("--min", default={}, type=DictStrArg(float))
         argparser.add_argument("--title")
-        argparser.add_argument("--unit", default={}, type=ListStrToDict(str))
+        argparser.add_argument("--unit", default={}, type=DictStrArg(str))
         argparser.add_argument("x", choices=COLUMNS)
         argparser.add_argument("y", choices=COLUMNS, nargs="+")
 
