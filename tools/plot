@@ -143,6 +143,11 @@ def main():
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
 
     if not early_args.info:
+        argparser.add_argument(
+            "--all-flows",
+            action="store_true",
+            help="plot a single data column for all flows",
+        )
         argparser.add_argument("--fmt", default={}, type=DictStrArg(str))
         argparser.add_argument(
             "--flow",
@@ -175,9 +180,14 @@ def main():
         print(f"\n{df.describe(percentiles=[])}")
         return
 
+    if args.all_flows and len(args.y) > 1:
+        print("can only plot one data column when plotting multiple flows")
+        return
+
     available_hashes = df["hash"].sort_values().unique()
-    selected_hash = available_hashes[args.flow]
-    df = df[df["hash"] == selected_hash]
+    if not args.all_flows:
+        selected_hash = available_hashes[args.flow]
+        df = df[df["hash"] == selected_hash]
 
     xunit = args.unit.get(args.x)
     try:
@@ -196,11 +206,9 @@ def main():
     axx = None
     lines = []
 
-    for i, y in enumerate(args.y):
-        if args.x == y:
-            return f"cannot use the same column “{args.x}” for x and y axis"
+    if args.all_flows:
+        y = args.y[0]
 
-        ycolor = COLORS[i % len(COLORS)]
         yfmt = args.fmt.get(y) or FORMATS.get(y, "-")
         ymax = args.max.get(y)
         ymin = args.min.get(y)
@@ -211,37 +219,67 @@ def main():
             return e
         df[y] *= UNIT_FACTORS.get(yunit, 1)
 
-        if axx is not None and y not in ("ev",):
-            axx = ax.twinx()
-            axx.spines["right"].set_position(("outward", (len(lines) - 1) * 50))
-        else:
-            axx = ax
+        grouped_df = df.groupby("hash")
 
-        if y == "ev":
-            lines.append(
-                ax.vlines(
-                    df.loc[df[y].notna(), args.x],
-                    0,
-                    1,
-                    color="lightgrey",
-                    label=LABELS.get(y),
-                    transform=ax.get_xaxis_transform(),
-                )
-            )
-        else:
+        for i, flow_hash in enumerate(available_hashes):
+            flow_df = grouped_df.get_group(flow_hash)
+
             lines.extend(
-                axx.plot(
+                ax.plot(
                     args.x,
                     y,
                     yfmt,
-                    color=ycolor,
-                    data=df[df.notna()],
-                    label=LABELS.get(y, y),
+                    data=flow_df,
+                    label=f"Flow {i}",
                 )
             )
-            axx.set_ylabel(LABELS.get(y, y))
-            set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
-            setup_axis(axx.yaxis, y, yunit)
+    else:
+        for i, y in enumerate(args.y):
+            if args.x == y:
+                return f"cannot use the same column “{args.x}” for x and y axis"
+
+            ycolor = COLORS[i % len(COLORS)]
+            yfmt = args.fmt.get(y) or FORMATS.get(y, "-")
+            ymax = args.max.get(y)
+            ymin = args.min.get(y)
+            yunit = args.unit.get(y)
+            try:
+                yunit = check_unit(y, yunit)
+            except LookupError as e:
+                return e
+            df[y] *= UNIT_FACTORS.get(yunit, 1)
+
+            if axx is not None and y not in ("ev",):
+                axx = ax.twinx()
+                axx.spines["right"].set_position(("outward", (len(lines) - 1) * 50))
+            else:
+                axx = ax
+
+            if y == "ev":
+                lines.append(
+                    ax.vlines(
+                        df.loc[df[y].notna(), args.x],
+                        0,
+                        1,
+                        color="lightgrey",
+                        label=LABELS.get(y),
+                        transform=ax.get_xaxis_transform(),
+                    )
+                )
+            else:
+                lines.extend(
+                    axx.plot(
+                        args.x,
+                        y,
+                        yfmt,
+                        color=ycolor,
+                        data=df[df.notna()],
+                        label=LABELS.get(y, y),
+                    )
+                )
+                axx.set_ylabel(LABELS.get(y, y))
+                set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
+                setup_axis(axx.yaxis, y, yunit)
 
     if len(lines) > 1:
         ax.legend(handles=lines)
