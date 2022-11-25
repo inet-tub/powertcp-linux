@@ -22,10 +22,11 @@
 #define BITS_PER_BYTE 8
 #define BITS_PER_TYPE(type) (sizeof(type) * BITS_PER_BYTE)
 #define BITS_TO_BYTES(nr) __KERNEL_DIV_ROUND_UP(nr, BITS_PER_TYPE(char))
-#define BUILD_BUG_ON(cond)                                                     \
-	if (cond) {                                                            \
-		__bpf_unreachable();                                           \
-	}
+#if __STDC_VERSION__ <= 201710L
+#define BUILD_BUG_ON(cond) _Static_assert(!(cond), "BUILD BUG: " #cond)
+#else
+#define BUILD_BUG_ON(cond) static_assert(!(cond), "BUILD BUG: " #cond)
+#endif
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #define max_t(type, x, y) max((type)(x), (type)(y))
 #define min(x, y) (((x) < (y)) ? (x) : (y))
