@@ -144,6 +144,12 @@ def main():
 
     if not early_args.info:
         argparser.add_argument("--fmt", default={}, type=DictStrArg(str))
+        argparser.add_argument(
+            "--flow",
+            default=0,
+            type=int,
+            help="select a flow from the data by zero-based index",
+        )
         argparser.add_argument("--max", default={}, type=DictStrArg(float))
         argparser.add_argument("--min", default={}, type=DictStrArg(float))
         argparser.add_argument("--title")
@@ -154,6 +160,7 @@ def main():
     args = argparser.parse_args(remaining_argv, early_args)
 
     df = pd.read_csv(args.csv_file)
+
     df["time"] -= df["time"].min()
     try:
         df["p_norm"] = df["p_norm_scaled"] / df["power_scale"]
@@ -167,6 +174,10 @@ def main():
         df.info()
         print(f"\n{df.describe(percentiles=[])}")
         return
+
+    available_hashes = df["hash"].sort_values().unique()
+    selected_hash = available_hashes[args.flow]
+    df = df[df["hash"] == selected_hash]
 
     xunit = args.unit.get(args.x)
     try:
