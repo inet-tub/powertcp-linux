@@ -190,7 +190,7 @@ def main():
     xmax = args.max.get(args.x, df[args.x].max())
     df = df[(df[args.x] >= xmin) & (df[args.x] <= xmax)]
 
-    fig, ax = plt.subplots(constrained_layout=True)
+    _fig, ax = plt.subplots(constrained_layout=True)
     ax.set_xlabel(LABELS.get(args.x, args.x))
     setup_axis(ax.xaxis, args.x, xunit)
     axx = None
