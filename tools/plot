@@ -18,7 +18,6 @@ COLUMNS = (
     "beta",
     "cwnd",
     "ev",
-    "hash",
     "p_norm",
     "qlen",
     "rate",
