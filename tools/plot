@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
+from scipy.signal import savgol_filter
 
 # "CN color spec", see https://matplotlib.org/stable/tutorials/colors/colors.html#specifying-colors
 COLORS = [f"C{i}" for i in range(11)]
@@ -157,6 +158,14 @@ def main():
         )
         argparser.add_argument("--max", default={}, type=DictStrArg(float))
         argparser.add_argument("--min", default={}, type=DictStrArg(float))
+        argparser.add_argument(
+            "--smooth",
+            const=99,
+            default=0,
+            nargs="?",
+            type=int,
+            help="smooth the plotted data; an optionally given uneven integer number (greater than 2) specifies the filter window size",
+        )
         argparser.add_argument("--title")
         argparser.add_argument("--unit", default={}, type=DictStrArg(str))
         argparser.add_argument("x", choices=COLUMNS)
@@ -223,13 +232,17 @@ def main():
 
         for i, flow_hash in enumerate(available_hashes):
             flow_df = grouped_df.get_group(flow_hash)
+            y_vals = (
+                savgol_filter(flow_df[y], args.smooth, 2)
+                if args.smooth > 0
+                else flow_df[y]
+            )
 
             lines.extend(
                 ax.plot(
-                    args.x,
-                    y,
+                    flow_df[args.x],
+                    y_vals,
                     yfmt,
-                    data=flow_df,
                     label=f"Flow {i}",
                 )
             )
@@ -267,13 +280,15 @@ def main():
                     )
                 )
             else:
+                y_vals = (
+                    savgol_filter(df[y], args.smooth, 2) if args.smooth > 0 else df[y]
+                )
                 lines.extend(
                     axx.plot(
-                        args.x,
-                        y,
+                        df[args.x],
+                        y_vals,
                         yfmt,
                         color=ycolor,
-                        data=df[df.notna()],
                         label=LABELS.get(y, y),
                     )
                 )
