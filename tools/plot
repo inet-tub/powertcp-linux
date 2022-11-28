@@ -63,7 +63,7 @@ UNITS = {
     "cwnd": ("bytes",),
     "ev": (None,),
     "p_norm": ("bit^2/s",),
-    "qlen": ("bytes"),
+    "qlen": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
     "time": ("us", "ms", "s"),
 }
@@ -116,7 +116,7 @@ def setup_axis(axis, col, unit):
     if col in ("ack_seq", "cwnd"):
         axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
     else:
-        if unit in ("bit/s", "bytes/s"):
+        if unit in ("bit/s", "bytes", "bytes/s"):
             axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit))
         if unit in ("bit^2/s",):
             axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit, usetex=True))
