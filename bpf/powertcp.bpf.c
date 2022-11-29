@@ -682,13 +682,12 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 SEC("struct_ops/powertcp_cong_avoid")
 void BPF_PROG(powertcp_cong_avoid, struct sock *sk, __u32 ack, __u32 acked)
 {
-	/* tcp_congestion_ops.cong_avoid is unfortunately non-optional in
-	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is also
-	 * set. This might be an oversight.
-	 */
-	/* NOTE: This stub is not needed for future kernel releases where
-	 * https://lore.kernel.org/all/20220622191227.898118-3-jthinz@mailbox.tu-berlin.de/
-	 * is included.
+	/* Before, tcp_congestion_ops.cong_avoid was non-optional in
+	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is
+	 * also set. This was fixed in Linux 6.0 with
+	 * https://lore.kernel.org/all/20220622191227.898118-3-jthinz@mailbox.tu-berlin.de/.
+	 *
+	 * This stub is kept here for compatibility with older kernels.
 	 */
 }
 
