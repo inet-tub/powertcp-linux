@@ -395,12 +395,17 @@ void do_trace(bool output_csv)
 	}
 
 	while (running) {
-		auto err = ring_buffer__poll(ring_buf.get(), 1000);
+		auto err = ring_buffer__poll(ring_buf.get(), 100);
 		if (err == -EINTR) {
 			return;
 		} else if (err < 0) {
 			throw std::system_error(-err, std::generic_category(),
 						"ring_buffer__poll");
+		}
+
+		/* Timeout? */
+		if (err == 0) {
+			std::fflush(stdout);
 		}
 	}
 }
