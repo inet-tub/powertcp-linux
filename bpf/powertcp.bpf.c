@@ -32,6 +32,11 @@ char _license[] SEC("license") = "Dual MIT/GPL";
 
 enum { max_n_hops = 1 };
 
+/* TCP-INT's swlat field (which we optionally replace with a timestamp), is
+ * only 24 bits long.
+ */
+static const unsigned int max_ts = 0xFFFFFFu;
+
 struct old_cwnd {
 	__u32 snd_nxt;
 	unsigned long cwnd;
@@ -39,7 +44,7 @@ struct old_cwnd {
 
 struct powertcp_hop_int {
 	__u32 bandwidth; /* in MByte/s */
-	__u32 ts;
+	__u32 ts; /* careful: in ns */
 	__u32 tx_bytes;
 	__u32 qlen;
 };
@@ -178,8 +183,14 @@ static const struct powertcp_int *get_int(struct sock *sk,
 
 	if (tint) {
 		__u32 bandwidth = BITS_TO_BYTES(hop_bw);
-		__u32 dt = !prev_int ? tp->srtt_us :
-					     (tp->tcp_mstamp - prev_int->hops[0].ts);
+#if USE_SWLAT_AS_TIMESTAMP
+		__u32 ts = tint->swlat;
+#else
+		__u32 ts = tp->tcp_mstamp * NSEC_PER_USEC;
+#endif
+		__u32 dt = (!prev_int ? tp->srtt_us * (1000u >> 3) :
+					      ts - prev_int->hops[0].ts) &
+			   max_ts;
 
 		ca->ptcp.cached_int.n_hop = 1;
 		/* TCP-INT does not provide an identification for the path. */
@@ -190,10 +201,12 @@ static const struct powertcp_int *get_int(struct sock *sk,
 
 		ca->ptcp.cached_int.hops[0].bandwidth = bandwidth;
 		ca->ptcp.cached_int.hops[0].qlen = tint->qdepth;
-		ca->ptcp.cached_int.hops[0].ts = tp->tcp_mstamp;
-		/* In lack of a tx_bytes value, we estimate it here: */
+		ca->ptcp.cached_int.hops[0].ts = ts;
+		/* In lack of a tx_bytes value, we estimate it here. A factor of
+		 * MEGA/USEC_PER_SEC is cancelled in the calculation:
+		 */
 		ca->ptcp.cached_int.hops[0].tx_bytes =
-			bandwidth * tint->util / 100 * dt;
+			bandwidth * tint->util / 100 / NSEC_PER_USEC * dt;
 
 		return &ca->ptcp.cached_int;
 	} else {
@@ -437,7 +450,8 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		const struct powertcp_hop_int *hop_int = &this_int->hops[i];
 		const struct powertcp_hop_int *prev_hop_int =
 			&prev_int->hops[i];
-		unsigned long dt = max(hop_int->ts - prev_hop_int->ts, 1u);
+		unsigned long dt =
+			max((hop_int->ts - prev_hop_int->ts) & max_ts, 1u);
 		long queue_diff =
 			hop_int->qlen > 0 ?
 				      (long)hop_int->qlen - (long)prev_hop_int->qlen :
@@ -448,7 +462,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 * macro of the same name in asm-generic/current.h.
 		 */
 		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
-				       (USEC_PER_SEC / dt);
+				       (NSEC_PER_SEC / dt);
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
@@ -469,10 +483,10 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		}
 	}
 
-	delta_t = min(delta_t, ca->base_rtt);
-	p_smooth = p_smooth == 0 ?
-				 p_norm :
-				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
+	delta_t = min(delta_t, NSEC_PER_USEC * ca->base_rtt);
+	p_smooth = p_smooth == 0 ? p_norm :
+					 ewma(delta_t, NSEC_PER_USEC * ca->base_rtt,
+					p_norm, p_smooth);
 
 	if (tracing && trace_event) {
 		trace_event->delta_t = delta_t;

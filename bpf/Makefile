@@ -5,6 +5,7 @@ VMLINUX ?= /sys/kernel/btf/vmlinux
 TCP_INT_DIR ?= tcp-int/code
 
 HAVE_WRITABLE_SK_PACING ?= 0
+USE_SWLAT_AS_TIMESTAMP ?= 0
 
 BPF_OBJS := powertcp.bpf.o
 BPF_DEPS := $(BPF_OBJS:.o=.d)
@@ -29,6 +30,7 @@ LIBBPF_LIBS := $(shell pkg-config --libs libbpf)
 BPF_CFLAGS := -g -target bpf -D__TARGET_ARCH_$(ARCH) \
 		  $(LIBBPF_CFLAGS) -c -O2 \
 		  -mcpu=v3 -Wall -DHAVE_WRITABLE_SK_PACING=$(HAVE_WRITABLE_SK_PACING) \
+		  -DUSE_SWLAT_AS_TIMESTAMP=$(USE_SWLAT_AS_TIMESTAMP) \
 		  -I.. -I$(TCP_INT_DIR)/include
 CXXFLAGS := -std=gnu++17 -O3 -Wall -Wextra $(LIBBPF_CFLAGS) -I.. -I$(TCP_INT_DIR)/src/tools
 DEP_CFLAGS := -M -MG -I.. -I$(TCP_INT_DIR)/include
