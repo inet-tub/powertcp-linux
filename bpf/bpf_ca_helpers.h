@@ -17,6 +17,7 @@
 #define SOL_TCP 6
 #define TCP_INFINITE_SSTHRESH 0x7fffffff
 #define USEC_PER_SEC 1000000L
+#define NSEC_PER_USEC 1000L
 
 #define __KERNEL_DIV_ROUND_UP(n, d) (((n) + (d)-1) / (d))
 #define BITS_PER_BYTE 8

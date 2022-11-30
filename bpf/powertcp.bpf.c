@@ -462,7 +462,8 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 			delta_t = dt;
 
 			if (tracing && trace_event) {
-				trace_event->time = hop_int->ts;
+				trace_event->time =
+					bpf_ktime_get_ns() / NSEC_PER_USEC;
 				trace_event->qlen = hop_int->qlen;
 			}
 		}
@@ -541,7 +542,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 
 	if (tracing && trace_event) {
 		trace_event->p_norm = p_smooth;
-		trace_event->time = tp->tcp_mstamp;
+		trace_event->time = bpf_ktime_get_ns() / NSEC_PER_USEC;
 	}
 
 	return p_smooth;

@@ -4,7 +4,7 @@
 /* This header requires prior inclusion of vmlinux.h or linux/types.h. */
 
 struct powertcp_trace_event {
-	__u32 time;
+	__u64 time;
 	unsigned int sk_hash;
 	__u32 cwnd;
 	unsigned long rate;

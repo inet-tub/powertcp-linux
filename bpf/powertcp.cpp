@@ -344,12 +344,13 @@ int handle_trace_event(void * /* ctx */, void *data, std::size_t /* data_sz */)
 	/*
 	 * Desired alignment in the output, showing the maximum value per data type:
 	 *
-	 * # Time      Socket hash           CWND (segments)  Rate (bytes/s)        Norm. power  Queue length (bytes)
-	 * 4294967295  18446744073709551615       4294967295  18446744073709551615  x.yyyyyyyy             4294967295
+	 * # Time (us)           Socket hash           CWND (segments)  Rate (bytes/s)        Norm. power  Queue length (bytes)
+	 * 18446744073709551615  18446744073709551615       4294967295  18446744073709551615  x.yyyyyyyy             4294967295
 	 */
-	std::printf("%10u  %20u       %10u  %20lu  %10.8f             %10ld\n",
-		    ev.time, ev.sk_hash, ev.cwnd, ev.rate,
-		    static_cast<double>(ev.p_norm) / power_scale, ev.qlen);
+	std::printf(
+		"%20llu  %20u       %10u  %20lu  %10.8f             %10ld\n",
+		ev.time, ev.sk_hash, ev.cwnd, ev.rate,
+		static_cast<double>(ev.p_norm) / power_scale, ev.qlen);
 
 	return 0;
 }
@@ -362,7 +363,7 @@ int handle_trace_event_csv(void * /* ctx */, void *data,
 	 */
 	const auto &ev = *static_cast<powertcp_trace_event *>(data);
 
-	std::printf("%u,%u,%u,%lu,%0f,%ld\n", ev.time, ev.sk_hash, ev.cwnd,
+	std::printf("%llu,%u,%u,%lu,%0f,%ld\n", ev.time, ev.sk_hash, ev.cwnd,
 		    ev.rate, static_cast<double>(ev.p_norm) / power_scale,
 		    ev.qlen);
 
@@ -391,7 +392,7 @@ void do_trace(bool output_csv)
 		std::printf("time,hash,cwnd,rate,p_norm,qlen\n");
 	} else {
 		std::printf(
-			"# Time      Socket hash           CWND (segments)  Rate (bytes/s)        Norm. power  Queue length (bytes)\n");
+			"# Time (us)           Socket hash           CWND (segments)  Rate (bytes/s)        Norm. power  Queue length (bytes)\n");
 	}
 
 	while (running) {
