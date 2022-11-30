@@ -10,6 +10,7 @@ struct powertcp_trace_event {
 	unsigned long rate;
 	unsigned long p_norm;
 	unsigned long qlen;
+	__u32 delta_t; /* careful: in ns */
 };
 
 #endif

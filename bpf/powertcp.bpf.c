@@ -475,6 +475,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
 
 	if (tracing && trace_event) {
+		trace_event->delta_t = delta_t;
 		trace_event->p_norm = p_smooth;
 	}
 
@@ -541,6 +542,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
 
 	if (tracing && trace_event) {
+		trace_event->delta_t = delta_t;
 		trace_event->p_norm = p_smooth;
 		trace_event->time = bpf_ktime_get_ns() / NSEC_PER_USEC;
 	}
