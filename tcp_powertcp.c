@@ -33,6 +33,12 @@
 
 #define MEGA 1000000UL
 
+/* In case the tx_bytes value is taken directly from a less-than-32-bit INT
+ * field, its maximum value has to be known for correct wrap-around in
+ * calculations.
+ */
+static const __u32 max_tx_bytes = 0xFFFFFFFFu;
+
 struct old_cwnd {
 	u32 snd_nxt;
 	unsigned long cwnd;
@@ -372,13 +378,15 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 			hop_int->qlen > 0 ?
 				      (long)hop_int->qlen - (long)prev_hop_int->qlen :
 				      0;
-		long tx_bytes_diff =
-			(long)hop_int->tx_bytes - (long)prev_hop_int->tx_bytes;
+		u32 tx_bytes_diff =
+			(hop_int->tx_bytes - prev_hop_int->tx_bytes) &
+			max_tx_bytes;
 		/* The variable name "current" instead of lambda would conflict with a
 		 * macro of the same name in asm-generic/current.h.
 		 */
-		unsigned long lambda = max(1l, queue_diff + tx_bytes_diff) *
-				       (USEC_PER_SEC / dt);
+		unsigned long lambda =
+			max(1l, queue_diff + (long)tx_bytes_diff) *
+			(USEC_PER_SEC / dt);
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
