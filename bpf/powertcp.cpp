@@ -52,15 +52,18 @@ using powertcp_bpf_ptr =
 	ptr_with_delete_func<powertcp_bpf, powertcp_bpf__destroy>;
 
 struct powertcp_param_bool {
+	using rodata_type = bool;
 	std::size_t rodata_off;
 };
 
 struct powertcp_param_double {
+	using rodata_type = long;
 	std::size_t rodata_off;
 	double scale;
 };
 
 struct powertcp_param_long {
+	using rodata_type = long;
 	std::size_t rodata_off;
 };
 
@@ -73,28 +76,29 @@ struct powertcp_param_visitor {
 
 	void operator()(const powertcp_param_bool &par) const
 	{
-		assign_param(true, rodata, par.rodata_off);
+		assign_param(true, par, rodata);
 	}
 
 	void operator()(const powertcp_param_double &par) const
 	{
-		assign_param(std::stod(str) * par.scale, rodata,
-			     par.rodata_off);
+		assign_param(std::stod(str) * par.scale, par, rodata);
 	}
 
 	void operator()(const powertcp_param_long &par) const
 	{
-		assign_param(std::stol(str), rodata, par.rodata_off);
+		assign_param(std::stol(str), par, rodata);
 	}
 
-	template <typename T>
-	void assign_param(T val, powertcp_bpf::powertcp_bpf__rodata *rodata,
-			  std::size_t rodata_off) const
+	template <typename T, typename P>
+	void assign_param(T val, P param,
+			  powertcp_bpf::powertcp_bpf__rodata *rodata) const
 	{
 		assert(rodata != nullptr);
 
-		auto &rodata_param = *reinterpret_cast<T *>(
-			reinterpret_cast<char *>(rodata) + rodata_off);
+		auto &rodata_param =
+			*reinterpret_cast<typename P::rodata_type *>(
+				reinterpret_cast<char *>(rodata) +
+				param.rodata_off);
 		/* TODO: Maybe check if a value is in the allowed range. Or do that in
 		 * the BPF code. */
 		rodata_param = val;
