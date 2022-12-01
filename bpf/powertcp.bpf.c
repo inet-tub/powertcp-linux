@@ -274,10 +274,6 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd,
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned long base_bdp = BITS_TO_BYTES(cwnd_scale) * ca->host_bw *
-				 ca->base_rtt / tp->mss_cache;
-
-	cwnd = min(cwnd, base_bdp);
 	ca->snd_cwnd = cwnd;
 	cwnd /= cwnd_scale;
 	cwnd = min_t(unsigned long, cwnd, tp->snd_cwnd_clamp);
@@ -416,6 +412,9 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 				   struct powertcp_trace_event *trace_event)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+	unsigned long base_bdp = BITS_TO_BYTES(cwnd_scale) * ca->host_bw *
+				 ca->base_rtt / tp->mss_cache;
 	unsigned long cwnd;
 
 	norm_power = max(norm_power, 1UL);
@@ -423,6 +422,7 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 		    power_scale * cwnd_old / norm_power + ca->beta,
 		    ca->snd_cwnd);
 	cwnd = max(1UL, cwnd);
+	cwnd = min(cwnd, base_bdp);
 	set_cwnd(sk, cwnd, trace_event);
 	return cwnd;
 }
