@@ -39,7 +39,7 @@ LABELS = {
     "ev": "Resets",
     "p_norm": "Normalized power",
     "qlen": "Queue length",
-    "rate": "Transmission rate",
+    "rate": "Pacing rate",
     "time": "Time",
 }
 
