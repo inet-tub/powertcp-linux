@@ -291,18 +291,13 @@ static void set_rate(struct sock *sk, unsigned long rate)
 	 * https://lore.kernel.org/all/20220622191227.898118-2-jthinz@mailbox.tu-berlin.de/,
 	 * writing to sk_pacing_* can be enabled with HAVE_WRITABLE_SK_PACING=1
 	 * passed to make.
+	 *
+	 * With an older and unpatched kernel, it is impossible to control
+	 * sk_pacing_rate here from BPF code.
 	 */
 	if (HAVE_WRITABLE_SK_PACING ||
 	    LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
 		sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
-	} else {
-		/* bpf_setsockopt() only accepts an int for this option: */
-		int irate = ~0U;
-		bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate,
-			       sizeof(irate));
-		irate = rate;
-		bpf_setsockopt(sk, SOL_TCP, SO_MAX_PACING_RATE, &irate,
-			       sizeof(irate));
 	}
 }
 
