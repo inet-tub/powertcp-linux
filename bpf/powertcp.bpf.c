@@ -254,14 +254,8 @@ static void require_pacing(struct sock *sk)
 	 * writing to sk_pacing_* can be enabled with HAVE_WRITABLE_SK_PACING=1
 	 * passed to make.
 	 */
-#if HAVE_WRITABLE_SK_PACING
-	bool have_writable_sk_pacing = true;
-#else
-	bool have_writable_sk_pacing =
-		LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0);
-#endif
-
-	if (have_writable_sk_pacing) {
+	if (HAVE_WRITABLE_SK_PACING ||
+	    LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
 		/* We do want sk_pacing_rate to be respected: */
 #if __clang_major__ >= 12
 		// cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
@@ -298,14 +292,8 @@ static void set_rate(struct sock *sk, unsigned long rate)
 	 * writing to sk_pacing_* can be enabled with HAVE_WRITABLE_SK_PACING=1
 	 * passed to make.
 	 */
-#if HAVE_WRITABLE_SK_PACING
-	bool have_writable_sk_pacing = true;
-#else
-	bool have_writable_sk_pacing =
-		LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0);
-#endif
-
-	if (have_writable_sk_pacing) {
+	if (HAVE_WRITABLE_SK_PACING ||
+	    LINUX_KERNEL_VERSION >= KERNEL_VERSION(6, 0, 0)) {
 		sk->sk_pacing_rate = min(rate, sk->sk_max_pacing_rate);
 	} else {
 		/* bpf_setsockopt() only accepts an int for this option: */
