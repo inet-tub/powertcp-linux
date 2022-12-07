@@ -484,6 +484,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 				trace_event->time =
 					bpf_ktime_get_ns() / NSEC_PER_USEC;
 				trace_event->qlen = hop_int->qlen;
+				trace_event->tx_bytes_diff = tx_bytes_diff;
 			}
 		}
 	}
