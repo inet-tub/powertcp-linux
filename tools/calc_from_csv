@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+
+import argparse
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+
+def main():
+    argparser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    argparser.add_argument("-c", dest="csv", action="store_true")
+    argparser.add_argument("-n", default=None, type=int)
+    argparser.add_argument("-p", dest="plot", action="store_true")
+    argparser.add_argument("base_rtt_us", type=float)
+    # argparser.add_argument("beta", type=int)
+    # argparser.add_argument("gamma", type=float)
+    argparser.add_argument("hop_bw_mbit", type=int)
+    argparser.add_argument("csv_file", type=Path)
+
+    args = argparser.parse_args()
+
+    df = pd.read_csv(args.csv_file, memory_map=True)
+
+    if args.n is not None:
+        df = df.head(args.n)
+
+    base_rtt = args.base_rtt_us / 10 ** 6
+    hop_bw = args.hop_bw_mbit * 10 ** 6 / 8
+
+    if not args.csv:
+        print(f"{base_rtt = } µs\n{hop_bw = } bytes/s\n")
+
+    df["delta_t"] /= 10 ** 9
+
+    qlen_diff = df["qlen"] - df["qlen"].shift(fill_value=0)
+    qlen_diff = qlen_diff.where(df["qlen"] > 0, 0)
+    # dq_dt = qlen_diff / df["delta_t"]
+    # tx_rate = df["tx_bytes_diff"] / df["delta_t"]
+    # current = dq_dt + tx_rate
+    queue_tx_bytes_diff = qlen_diff + df["tx_bytes_diff"]
+    queue_tx_bytes_diff = queue_tx_bytes_diff.where(queue_tx_bytes_diff > 1, 1)
+    current = queue_tx_bytes_diff / df["delta_t"]
+    # current = current.where(current > 0.0, 0.0)
+    bdp = hop_bw * base_rtt
+    voltage = df["qlen"] + bdp
+    p = current * voltage
+    e = hop_bw ** 2 * base_rtt
+    p_norm = p / e
+
+    # This is a slow and very naive, iterative implementation of the EWMA:
+    p_smooth = p_norm.copy()
+    for ind in df.index[1:]:
+        delta_t_ind = min(base_rtt, df["delta_t"][ind])
+        p_smooth[ind] = (
+            p_smooth[ind - 1] * (base_rtt - delta_t_ind) + p_norm[ind] * delta_t_ind
+        ) / base_rtt
+
+    py_df = pd.DataFrame(
+        data={
+            "qlen_diff": qlen_diff,
+            # "dq_dt": dq_dt,
+            # "tx_rate": tx_rate,
+            "queue_tx_bytes_diff": queue_tx_bytes_diff,
+            "current": current,
+            "voltage": voltage,
+            "py_p_norm": p_norm,
+            "py_p_smooth": p_smooth,
+        }
+    )
+
+    both_df = pd.concat([df, py_df], axis="columns")
+
+    if args.plot:
+        # plt.plot(df["time"], p_norm)
+        p_norm.plot()
+        plt.show()
+    else:
+        try:
+            s = (
+                both_df.to_csv(index=False)
+                if args.csv
+                else both_df.to_string(index=False)
+            )
+        except KeyboardInterrupt:
+            return
+        try:
+            print(s)
+        except (BrokenPipeError, KeyboardInterrupt):
+            pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
