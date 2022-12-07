@@ -495,7 +495,8 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 
 	if (tracing && trace_event) {
 		trace_event->delta_t = delta_t;
-		trace_event->p_norm = p_smooth;
+		trace_event->p_norm = p_norm;
+		trace_event->p_smooth = p_smooth;
 	}
 
 	return p_smooth;
