@@ -121,8 +121,6 @@ def setup_axis(axis, col, unit):
 
     if col in ("ack_seq", "cwnd"):
         axis.set_major_formatter(ticker.StrMethodFormatter("{x:.0f}"))
-    elif col in ("p_norm", "p_smooth"):
-        axis.set_major_formatter(ticker.EngFormatter())
     else:
         if unit in ("bit/s", "bytes", "bytes/s"):
             axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit))
