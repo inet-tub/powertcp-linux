@@ -375,9 +375,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 			&prev_int->hops[i];
 		unsigned long dt = max(hop_int->ts - prev_hop_int->ts, 1u);
 		long queue_diff =
-			hop_int->qlen > 0 ?
-				      (long)hop_int->qlen - (long)prev_hop_int->qlen :
-				      0;
+			(long)hop_int->qlen - (long)prev_hop_int->qlen;
 		u32 tx_bytes_diff =
 			(hop_int->tx_bytes - prev_hop_int->tx_bytes) &
 			max_tx_bytes;
