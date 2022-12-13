@@ -240,13 +240,18 @@ static const struct powertcp_int *get_prev_int(struct sock *sk)
 {
 	struct ptcp_powertcp *ca = inet_csk_ca(sk);
 	struct powertcp_int *prev_int = &ca->prev_int;
-	/* With TCP-INT, the difference in tx_bytes since last ACK is already
-	 * estimated in get_int(). The previous value must be 0 so
-	 * ptcp_norm_power() does not calculate a second difference with a value
-	 * potentially coming from a different switch.
-	 */
-	prev_int->hops[0].tx_bytes = 0;
-	return prev_int;
+
+	if (prev_int->n_hop) {
+		/* With TCP-INT, the difference in tx_bytes since last ACK is already
+		 * estimated in get_int(). The previous value must be 0 so
+		 * ptcp_norm_power() does not calculate a second difference with a
+		 * value potentially coming from a different switch.
+		 */
+		prev_int->hops[0].tx_bytes = 0;
+		return prev_int;
+	}
+
+	return NULL;
 }
 
 /* Return the most recently measured RTT (in us). */
@@ -445,7 +450,12 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 
 	/* TODO: Do something helpful (a full reset?) when the path changes. */
 	if (!this_int || !prev_int || this_int->path_id != prev_int->path_id) {
-		return p_smooth > 0 ? p_smooth : power_scale;
+		/* Power calculations will be skipped for the first one or two ACKs.
+		 * p_smooth will still be 0 then. This is intentional to have power
+		 * smoothing start with a proper value (=p_norm) at the end of this
+		 * function.
+		 */
+		return p_smooth;
 	}
 
 	/* for each egress port i on the path */
@@ -539,7 +549,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	unsigned long rtt_us;
 
 	if (before(tp->snd_una, ca->last_updated)) {
-		return p_smooth > 0 ? p_smooth : power_scale;
+		return p_smooth;
 	}
 
 	rtt_us = get_rtt(sk, rs);
@@ -673,14 +683,17 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
                                                                                \
 		cwnd_old = get_cwnd(sk);                                       \
 		norm_power = func_prefix##_norm_power(sk, rs, &trace_event);   \
-		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power,   \
-						   &trace_event);              \
-		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / ca->base_rtt /  \
-		       cwnd_scale;                                             \
-		set_rate(sk, rate);                                            \
+		if (norm_power) {                                              \
+			cwnd = func_prefix##_update_window(                    \
+				sk, cwnd_old, norm_power, &trace_event);       \
+			rate = (USEC_PER_SEC * cwnd * tp->mss_cache) /         \
+			       ca->base_rtt / cwnd_scale;                      \
+			set_rate(sk, rate);                                    \
+		}                                                              \
+                                                                               \
 		func_prefix##_update_old(sk, rs, norm_power);                  \
                                                                                \
-		if (tracing && trace_event.time != 0) {                        \
+		if (tracing && norm_power && trace_event.time != 0) {          \
 			trace_event.rate = rate;                               \
 			trace_event.sk_hash = sk->__sk_common.skc_hash;        \
 			bpf_ringbuf_output(&trace_events, &trace_event,        \

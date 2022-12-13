@@ -365,7 +365,12 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 
 	/* TODO: Do something helpful (a full reset?) when the path changes. */
 	if (!this_int || !prev_int || this_int->path_id != prev_int->path_id) {
-		return p_smooth > 0 ? p_smooth : power_scale;
+		/* Power calculations will be skipped for the first one or two ACKs.
+		 * p_smooth will still be 0 then. This is intentional to have power
+		 * smoothing start with a proper value (=p_norm) at the end of this
+		 * function.
+		 */
+		return p_smooth;
 	}
 
 	/* for each egress port i on the path */
@@ -442,7 +447,7 @@ static unsigned long rttptcp_norm_power(const struct sock *sk,
 	unsigned long rtt_us;
 
 	if (before(tp->snd_una, ca->last_updated)) {
-		return p_smooth > 0 ? p_smooth : power_scale;
+		return p_smooth;
 	}
 
 	rtt_us = get_rtt(sk, rs);
@@ -568,13 +573,17 @@ static unsigned long rttptcp_update_window(struct sock *sk,
                                                                                \
 		cwnd_old = get_cwnd(sk);                                       \
 		norm_power = func_prefix##_norm_power(sk, rs);                 \
-		cwnd = func_prefix##_update_window(sk, cwnd_old, norm_power);  \
-		rate = (USEC_PER_SEC * cwnd * tp->mss_cache) / ca->base_rtt /  \
-		       cwnd_scale;                                             \
-		set_rate(sk, rate);                                            \
+		if (norm_power) {                                              \
+			cwnd = func_prefix##_update_window(sk, cwnd_old,       \
+							   norm_power);        \
+			rate = (USEC_PER_SEC * cwnd * tp->mss_cache) /         \
+			       ca->base_rtt / cwnd_scale;                      \
+			set_rate(sk, rate);                                    \
+		}                                                              \
+                                                                               \
 		updated = func_prefix##_update_old(sk, rs, norm_power);        \
                                                                                \
-		if (updated) {                                                 \
+		if (norm_power && updated) {                                   \
 			trace_new_ack(sk);                                     \
 		}                                                              \
 	}                                                                      \
