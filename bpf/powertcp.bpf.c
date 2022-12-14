@@ -473,16 +473,16 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		/* The variable name "current" instead of lambda would conflict with a
 		 * macro of the same name in asm-generic/current.h.
 		 */
-		unsigned long lambda =
-			max(1ul, (unsigned long)max(
-					 0l, queue_diff + (long)tx_bytes_diff) *
-					 (NSEC_PER_SEC / dt));
+		unsigned long lambda = max(
+			1ul, (unsigned long)max(
+				     0l, queue_diff + (long)tx_bytes_diff) *
+				     (/* USEC_PER_SEC * */ NSEC_PER_USEC / dt));
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
 		unsigned long equilibrium = max(
-			(unsigned long)hop_int->bandwidth * hop_int->bandwidth /
-				power_scale * MEGA * ca->base_rtt,
+			(unsigned long)hop_int->bandwidth * hop_int->bandwidth *
+				/* MEGA * */ ca->base_rtt / power_scale,
 			1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm || i == 0) {
