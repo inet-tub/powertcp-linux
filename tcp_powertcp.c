@@ -418,7 +418,10 @@ static void ptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 #if 0
 	struct ptcp_powertcp *ca = inet_csk_ca(sk);
 	struct powertcp_int *prev_int = &ca->prev_int;
-	prev_int->path_id = 0;
+
+	if (ev == CA_EVENT_CWND_RESTART) {
+		prev_int->path_id = 0;
+	}
 #endif
 
 	reset(sk, ev);
