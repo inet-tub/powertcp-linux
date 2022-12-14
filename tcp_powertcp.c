@@ -388,8 +388,9 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 * macro of the same name in asm-generic/current.h.
 		 */
 		unsigned long lambda =
-			max(1l, queue_diff + (long)tx_bytes_diff) *
-			(USEC_PER_SEC / dt);
+			max(1ul, (unsigned long)max(
+					 0l, queue_diff + (long)tx_bytes_diff) *
+					 (NSEC_PER_SEC / dt));
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
