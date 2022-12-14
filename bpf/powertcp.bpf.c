@@ -484,7 +484,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 				power_scale * MEGA * ca->base_rtt,
 			1ul);
 		unsigned long hop_p_norm = hop_p / equilibrium;
-		if (hop_p_norm > p_norm) {
+		if (hop_p_norm > p_norm || i == 0) {
 			p_norm = hop_p_norm;
 			delta_t = dt;
 
