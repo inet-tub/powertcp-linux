@@ -311,7 +311,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = max(1UL, tp->tcp_mstamp - ca->t_prev);
+	dt = max(1UL, (unsigned long)(tp->tcp_mstamp - ca->t_prev));
 	delta_t = min(dt, ca->base_rtt);
 	if (ca->prev_rtt_us <= rtt_us) {
 		rtt_grad = power_scale * (rtt_us - ca->prev_rtt_us) / dt;
