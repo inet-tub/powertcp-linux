@@ -313,9 +313,21 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	 */
 	dt = max(1UL, tp->tcp_mstamp - ca->t_prev);
 	delta_t = min(dt, ca->base_rtt);
-	/* Limiting rtt_grad to non-negative values. */
-	rtt_grad = power_scale * (rtt_us - min(ca->prev_rtt_us, rtt_us)) / dt;
-	p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
+	if (ca->prev_rtt_us <= rtt_us) {
+		rtt_grad = power_scale * (rtt_us - ca->prev_rtt_us) / dt;
+		p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
+	} else {
+		/* Separate code path for negative rtt_grad since BPF does not support
+		 * division by signed numbers.
+		 */
+		rtt_grad = power_scale * (ca->prev_rtt_us - rtt_us) / dt;
+		p_norm = power_scale > rtt_grad ?
+				       (power_scale - rtt_grad) * rtt_us /
+					 ca->base_rtt :
+				       0UL;
+		p_norm = (power_scale - max(power_scale, rtt_grad)) * rtt_us /
+			 ca->base_rtt;
+	}
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
 	 */
