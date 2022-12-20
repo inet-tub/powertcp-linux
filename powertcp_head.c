@@ -51,7 +51,7 @@ struct powertcp_int {
 	struct powertcp_hop_int hops[max_n_hops];
 };
 
-#define POWERTCP_STRUCT(struct_name, fields)                                                \
+#define POWERTCP_STRUCT(struct_name, ...)                                                   \
 	struct struct_name {                                                                \
 		unsigned long base_rtt;                                                     \
 		unsigned long snd_cwnd;                                                     \
@@ -69,12 +69,12 @@ struct powertcp_int {
 		 */ \
 		unsigned long host_bw; /* Mbit/s */                                         \
                                                                                             \
-		fields                                                                      \
+		__VA_ARGS__                                                                 \
 	}
 #define POWERTCP_STRUCT_FIELDS(...) __VA_ARGS__
 
 // clang-format off
-POWERTCP_STRUCT(powertcp, POWERTCP_STRUCT_FIELDS());
+POWERTCP_STRUCT(powertcp);
 
 POWERTCP_STRUCT(ptcp_powertcp,
 	POWERTCP_STRUCT_FIELDS(
