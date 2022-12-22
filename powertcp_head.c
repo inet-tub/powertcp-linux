@@ -38,19 +38,6 @@ struct old_cwnd {
 	unsigned long cwnd;
 };
 
-struct powertcp_hop_int {
-	u32 bandwidth; /* in MByte/s */
-	u32 ts; /* careful: in ns */
-	u32 tx_bytes;
-	u32 qlen;
-};
-
-struct powertcp_int {
-	int n_hop;
-	int path_id;
-	struct powertcp_hop_int hops[max_n_hops];
-};
-
 #define POWERTCP_STRUCT(struct_name, ...)                                                   \
 	struct struct_name {                                                                \
 		unsigned long base_rtt;                                                     \
@@ -78,8 +65,7 @@ POWERTCP_STRUCT(powertcp);
 
 POWERTCP_STRUCT(ptcp_powertcp,
 	POWERTCP_STRUCT_FIELDS(
-		struct powertcp_int cached_int;
-		struct powertcp_int prev_int;
+		powertcp_int_impl_t int_impl;
 	)
 );
 

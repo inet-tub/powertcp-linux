@@ -65,3 +65,7 @@ or used with any other of the available tools, like
 
 ## eBPF Program
 See [bpf/README.md](bpf/README.md).
+
+## Implementation Details
+There is *some* documentation on aspects of the implementation(s) in
+[doc/](doc/).

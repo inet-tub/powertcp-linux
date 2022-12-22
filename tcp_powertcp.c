@@ -42,20 +42,29 @@
 #define POWERTCP_PARAM_ATTRS static __read_mostly
 #define POWERTCP_UNLIKELY unlikely
 
-enum { max_n_hops = 1 };
-
-/* TCP-INT's swlat field (which we optionally replace with a timestamp), is
- * only 24 bits long.
- */
-static const unsigned int max_ts = 0xFFFFFFu;
-
-/* In case the tx_bytes value is taken directly from a less-than-32-bit INT
- * field, its maximum value has to be known for correct wrap-around in
- * calculations.
- */
-static const __u32 max_tx_bytes = 0xFFFFFFFFu;
+#include "powertcp_no-int_head.c"
 
 #include "powertcp_head.c"
+
+module_param(base_rtt, long, 0444);
+MODULE_PARM_DESC(
+	base_rtt,
+	"base (minimum) round-trip time (RTT) in us (default: -1; -1: automatically detect)");
+module_param(beta, long, 0444);
+MODULE_PARM_DESC(beta,
+		 "additive increase (default: -1; -1: automatically set beta)");
+module_param(expected_flows, long, 0444);
+MODULE_PARM_DESC(expected_flows,
+		 "expected number of flows sharing the host NIC (default: 10)");
+module_param(gamma, long, 0444);
+MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
+				gamma_scale) "(default: 921 ~= 0,9)");
+module_param(hop_bw, long, 0444);
+MODULE_PARM_DESC(hop_bw, "hop bandwidth in Mbit/s");
+module_param(host_bw, long, 0444);
+MODULE_PARM_DESC(
+	host_bw,
+	"host NIC bandwidth in Mbit/s (default: -1; -1: detect from socket)");
 
 /* Look for the host bandwidth (in Mbit/s). */
 static unsigned long get_host_bw(struct sock *sk)
@@ -90,17 +99,6 @@ static unsigned long get_host_bw(struct sock *sk)
 	return bw;
 }
 
-static const struct powertcp_int *get_int(struct sock *sk,
-					  const struct powertcp_int *prev_int)
-{
-	return NULL;
-}
-
-static const struct powertcp_int *get_prev_int(struct sock *sk)
-{
-	return NULL;
-}
-
 static void output_trace_event(struct powertcp_trace_event *trace_event)
 {
 	trace_event->time = ktime_get_ns() / NSEC_PER_USEC;
@@ -131,27 +129,9 @@ static bool tracing_enabled(void)
  */
 static const void *const powertcp_cong_avoid = NULL;
 
-#include "powertcp_impl.c"
+#include "powertcp_no-int.c"
 
-module_param(base_rtt, long, 0444);
-MODULE_PARM_DESC(
-	base_rtt,
-	"base (minimum) round-trip time (RTT) in us (default: -1; -1: automatically detect)");
-module_param(beta, long, 0444);
-MODULE_PARM_DESC(beta,
-		 "additive increase (default: -1; -1: automatically set beta)");
-module_param(expected_flows, long, 0444);
-MODULE_PARM_DESC(expected_flows,
-		 "expected number of flows sharing the host NIC (default: 10)");
-module_param(gamma, long, 0444);
-MODULE_PARM_DESC(gamma, "exponential moving average weight, times " __stringify(
-				gamma_scale) "(default: 921 ~= 0,9)");
-module_param(hop_bw, long, 0444);
-MODULE_PARM_DESC(hop_bw, "hop bandwidth in Mbit/s");
-module_param(host_bw, long, 0444);
-MODULE_PARM_DESC(
-	host_bw,
-	"host NIC bandwidth in Mbit/s (default: -1; -1: detect from socket)");
+#include "powertcp.c"
 
 static int __init powertcp_register(void)
 {
@@ -162,6 +142,12 @@ static int __init powertcp_register(void)
 	powertcp.owner = THIS_MODULE;
 	ret = tcp_register_congestion_control(&powertcp);
 	if (ret) {
+		return ret;
+	}
+
+	ret = register_int(&powertcp);
+	if (ret) {
+		tcp_unregister_congestion_control(&powertcp);
 		return ret;
 	}
 
@@ -176,6 +162,7 @@ static int __init powertcp_register(void)
 
 static void __exit powertcp_unregister(void)
 {
+	unregister_int(&powertcp);
 	tcp_unregister_congestion_control(&powertcp);
 	tcp_unregister_congestion_control(&rttpowertcp);
 }

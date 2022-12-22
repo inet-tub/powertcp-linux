@@ -20,9 +20,6 @@
 
 #include "../powertcp_trace.h"
 
-#include "tcp_int_common.h"
-#include "tcp_int_common.bpf.h"
-
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
@@ -40,18 +37,7 @@ char _license[] SEC("license") = "Dual MIT/GPL";
 /* Configuration variables can only be set before loading the BPF object: */
 #define POWERTCP_PARAM_ATTRS const volatile
 
-enum { max_n_hops = 1 };
-
-/* TCP-INT's swlat field (which we optionally replace with a timestamp), is
- * only 24 bits long.
- */
-static const unsigned int max_ts = 0xFFFFFFu;
-
-/* In case the tx_bytes value is taken directly from a less-than-32-bit INT
- * field, its maximum value has to be known for correct wrap-around in
- * calculations.
- */
-static const __u32 max_tx_bytes = 0xFFFFFFFFu;
+#include "powertcp_tcp-int_head.bpf.c"
 
 #include "../powertcp_head.c"
 
@@ -93,71 +79,6 @@ static unsigned long get_host_bw(struct sock *sk)
 
 	return bw;
 #endif
-}
-
-static const struct powertcp_int *get_int(struct sock *sk,
-					  const struct powertcp_int *prev_int)
-{
-	struct ptcp_powertcp *ca = inet_csk_ca(sk);
-	const struct tcp_sock *tp = tcp_sk(sk);
-	/* Not using tcp_int_get_state() here since it uses
-	 * BPF_SK_STORAGE_GET_F_CREATE. We might want to use a missing map entry as
-	 * an indicator to fall back to RTT-PowerTCP.
-	 */
-	const struct tcp_int_state *tint =
-		bpf_sk_storage_get(&map_tcp_int_state, sk, NULL, 0);
-
-	if (tint) {
-		__u32 bandwidth = BITS_TO_BYTES(hop_bw);
-#if USE_SWLAT_AS_TIMESTAMP
-		__u32 ts = tint->swlat;
-#else
-		__u32 ts = tp->tcp_mstamp * NSEC_PER_USEC;
-#endif
-		__u32 dt = (!prev_int ? tp->srtt_us * (1000u >> 3) :
-					      ts - prev_int->hops[0].ts) &
-			   max_ts;
-
-		ca->cached_int.n_hop = 1;
-		/* TCP-INT does not provide an identification for the path. */
-		/* TODO: Evaluate if it makes sense to use the switch ID as path ID.
-		 * Could lead to a too frequently detected path change, though.
-		 */
-		ca->cached_int.path_id = 1;
-
-		ca->cached_int.hops[0].bandwidth = bandwidth;
-		ca->cached_int.hops[0].qlen = tint->qdepth;
-		ca->cached_int.hops[0].ts = ts;
-		/* In lack of a tx_bytes value, we estimate it here. A factor of
-		 * MEGA/USEC_PER_SEC is cancelled in the calculation:
-		 */
-		ca->cached_int.hops[0].tx_bytes =
-			bandwidth * tint->util / 100 / NSEC_PER_USEC * dt;
-
-		return &ca->cached_int;
-	} else {
-		ca->cached_int.n_hop = 0;
-	}
-
-	return NULL;
-}
-
-static const struct powertcp_int *get_prev_int(struct sock *sk)
-{
-	struct ptcp_powertcp *ca = inet_csk_ca(sk);
-	struct powertcp_int *prev_int = &ca->prev_int;
-
-	if (prev_int->n_hop) {
-		/* With TCP-INT, the difference in tx_bytes since last ACK is already
-		 * estimated in get_int(). The previous value must be 0 so
-		 * ptcp_norm_power() does not calculate a second difference with a
-		 * value potentially coming from a different switch.
-		 */
-		prev_int->hops[0].tx_bytes = 0;
-		return prev_int;
-	}
-
-	return NULL;
 }
 
 static void output_trace_event(struct powertcp_trace_event *trace_event)
@@ -222,4 +143,6 @@ void POWERTCP_CONG_OPS_FUNC(powertcp_cong_avoid, struct sock *sk, __u32 ack,
 	 */
 }
 
-#include "../powertcp_impl.c"
+#include "powertcp_tcp-int.bpf.c"
+
+#include "../powertcp.c"
