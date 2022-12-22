@@ -34,9 +34,9 @@
 #define min(x, y) (((x) < (y)) ? (x) : (y))
 #define min_t(type, x, y) min((type)(x), (type)(y))
 
-static inline bool before(__u32 seq1, __u32 seq2)
+static inline bool before(u32 seq1, u32 seq2)
 {
-	return (__s32)(seq1 - seq2) < 0;
+	return (s32)(seq1 - seq2) < 0;
 }
 #define after(seq2, seq1) before(seq1, seq2)
 
@@ -51,7 +51,7 @@ static inline void *inet_csk_ca(const struct sock *sk)
 }
 
 /* Minimum RTT in usec. ~0 means not available. */
-static inline __u32 tcp_min_rtt(const struct tcp_sock *tp)
+static inline u32 tcp_min_rtt(const struct tcp_sock *tp)
 {
 	return tp->rtt_min.s[0].v;
 }
@@ -61,9 +61,9 @@ static inline struct tcp_sock *tcp_sk(const struct sock *sk)
 	return (struct tcp_sock *)sk;
 }
 
-static inline __u32 tcp_stamp_us_delta(__u64 t1, __u64 t0)
+static inline u32 tcp_stamp_us_delta(u64 t1, u64 t0)
 {
-	return max_t(__s64, t1 - t0, 0);
+	return max_t(s64, t1 - t0, 0);
 }
 
 #endif

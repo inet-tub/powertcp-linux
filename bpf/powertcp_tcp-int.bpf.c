@@ -17,13 +17,13 @@ static const struct powertcp_int *get_int(struct sock *sk,
 		bpf_sk_storage_get(&map_tcp_int_state, sk, NULL, 0);
 
 	if (tint) {
-		__u32 bandwidth = BITS_TO_BYTES(hop_bw);
+		u32 bandwidth = BITS_TO_BYTES(hop_bw);
 #if USE_SWLAT_AS_TIMESTAMP
-		__u32 ts = tint->swlat;
+		u32 ts = tint->swlat;
 #else
-		__u32 ts = tp->tcp_mstamp * NSEC_PER_USEC;
+		u32 ts = tp->tcp_mstamp * NSEC_PER_USEC;
 #endif
-		__u32 dt = (!prev_int ? tp->srtt_us * (1000u >> 3) :
+		u32 dt = (!prev_int ? tp->srtt_us * (1000u >> 3) :
 					      ts - prev_int->hops[0].ts) &
 			   max_ts;
 

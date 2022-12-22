@@ -42,7 +42,7 @@ static unsigned long get_cwnd(const struct sock *sk)
 {
 	const struct powertcp *ca = inet_csk_ca(sk);
 	//const struct tcp_sock *tp = tcp_sk(sk);
-	//__u32 ack_seq = tp->snd_una;
+	//u32 ack_seq = tp->snd_una;
 
 	if (ca->old_cwnd.cwnd != 0 && ca->old_cwnd.snd_nxt != 0 /*&&
 	    before(ca->old_cwnd.snd_nxt, ack_seq)*/) {
@@ -228,7 +228,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 			max((hop_int->ts - prev_hop_int->ts) & max_ts, 1u);
 		long queue_diff =
 			(long)hop_int->qlen - (long)prev_hop_int->qlen;
-		__u32 tx_bytes_diff =
+		u32 tx_bytes_diff =
 			(hop_int->tx_bytes - prev_hop_int->tx_bytes) &
 			max_tx_bytes;
 		/* The variable name "current" instead of lambda would conflict with a

@@ -13,7 +13,7 @@ static const unsigned int max_ts = 0xFFFFFFu;
  * field, its maximum value has to be known for correct wrap-around in
  * calculations.
  */
-static const __u32 max_tx_bytes = 0xFFFFFFFFu;
+static const u32 max_tx_bytes = 0xFFFFFFFFu;
 
 struct powertcp_int_impl {
 	struct powertcp_int cached_int;

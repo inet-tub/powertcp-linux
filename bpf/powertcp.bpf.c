@@ -131,8 +131,8 @@ static bool tracing_enabled()
 	return tracing;
 }
 
-void POWERTCP_CONG_OPS_FUNC(powertcp_cong_avoid, struct sock *sk, __u32 ack,
-			    __u32 acked)
+void POWERTCP_CONG_OPS_FUNC(powertcp_cong_avoid, struct sock *sk, u32 ack,
+			    u32 acked)
 {
 	/* Before, tcp_congestion_ops.cong_avoid was non-optional in
 	 * net/ipv4/bpf_tcp_ca.c, even if it is never used when cong_control is
