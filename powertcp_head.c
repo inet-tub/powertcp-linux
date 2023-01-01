@@ -58,7 +58,7 @@ struct old_cwnd {
                                                                                             \
 		__VA_ARGS__                                                                 \
 	}
-#define POWERTCP_STRUCT_FIELDS(...) __VA_ARGS__
+#define POWERTCP_STRUCT_FIELDS(fields) fields
 
 // clang-format off
 POWERTCP_STRUCT(powertcp);
