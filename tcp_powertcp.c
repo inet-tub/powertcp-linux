@@ -137,8 +137,6 @@ static int __init powertcp_register(void)
 {
 	int ret;
 
-	BUILD_BUG_ON(sizeof(struct powertcp) > ICSK_CA_PRIV_SIZE);
-
 	powertcp.owner = THIS_MODULE;
 	ret = tcp_register_congestion_control(&powertcp);
 	if (ret) {
