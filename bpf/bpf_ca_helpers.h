@@ -29,6 +29,8 @@
 #else
 #define BUILD_BUG_ON(cond) static_assert(!(cond), "BUILD BUG: " #cond)
 #endif
+#define ICSK_CA_PRIV_SIZE                                                      \
+	(sizeof(((struct inet_connection_sock *)NULL)->icsk_ca_priv))
 #define max(x, y) (((x) > (y)) ? (x) : (y))
 #define max_t(type, x, y) max((type)(x), (type)(y))
 #define min(x, y) (((x) < (y)) ? (x) : (y))
