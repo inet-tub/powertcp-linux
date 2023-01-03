@@ -436,6 +436,9 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 		BUILD_BUG_ON(sizeof(struct powertcp) >                         \
 			     sizeof(((struct inet_connection_sock *)NULL)      \
 					    ->icsk_ca_priv));                  \
+		BUILD_BUG_ON(sizeof(struct func_prefix##_powertcp) >           \
+			     sizeof(((struct inet_connection_sock *)NULL)      \
+					    ->icsk_ca_priv));                  \
                                                                                \
 		func_prefix##_init(sk);                                        \
                                                                                \
