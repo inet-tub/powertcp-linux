@@ -124,8 +124,8 @@ static bool tracing_enabled(void)
 	return trace_cong_control_enabled();
 }
 
-/* cong_avoid was previously non-optional in tcp_congestion_ops. For the module
- * implementation it can just be set to a NULL pointer.
+/* cong_avoid was previously non-optional in tcp_congestion_ops for a BPF CA.
+ * For the module implementation it can just be set to a NULL pointer.
  */
 static const void *const powertcp_cong_avoid = NULL;
 
