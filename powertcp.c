@@ -64,6 +64,12 @@ static unsigned long get_rtt(const struct sock *sk,
 	return rtt;
 }
 
+/* Limit a value to positive, non-zero numbers. */
+static unsigned long not_zero(unsigned long val)
+{
+	return max(1UL, val);
+}
+
 static void set_cwnd(struct sock *sk, unsigned long cwnd,
 		     struct powertcp_trace_event *trace_event)
 {
@@ -73,7 +79,7 @@ static void set_cwnd(struct sock *sk, unsigned long cwnd,
 	ca->snd_cwnd = cwnd;
 	cwnd /= cwnd_scale;
 	cwnd = min_t(unsigned long, cwnd, tp->snd_cwnd_clamp);
-	tp->snd_cwnd = max(1UL, cwnd);
+	tp->snd_cwnd = not_zero(cwnd);
 
 	if (tracing_enabled() && trace_event) {
 		trace_event->cwnd = tp->snd_cwnd;
@@ -181,11 +187,11 @@ static unsigned long update_window(struct sock *sk, unsigned long cwnd_old,
 				 ca->base_rtt / tp->mss_cache;
 	unsigned long cwnd;
 
-	norm_power = max(norm_power, 1UL);
+	norm_power = not_zero(norm_power);
 	cwnd = ewma(gamma, gamma_scale,
 		    power_scale * cwnd_old / norm_power + ca->beta,
 		    ca->snd_cwnd);
-	cwnd = max(1UL, cwnd);
+	cwnd = not_zero(cwnd);
 	cwnd = min(cwnd, base_bdp);
 	set_cwnd(sk, cwnd, trace_event);
 	return cwnd;
@@ -225,7 +231,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		const struct powertcp_hop_int *prev_hop_int =
 			&prev_int->hops[i];
 		unsigned long dt =
-			max((hop_int->ts - prev_hop_int->ts) & max_ts, 1u);
+			not_zero((hop_int->ts - prev_hop_int->ts) & max_ts);
 		long queue_diff =
 			(long)hop_int->qlen - (long)prev_hop_int->qlen;
 		u32 tx_bytes_diff =
@@ -241,10 +247,9 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		unsigned long bdp = hop_int->bandwidth * ca->base_rtt;
 		unsigned long voltage = hop_int->qlen + bdp;
 		unsigned long hop_p = lambda * voltage;
-		unsigned long equilibrium = max(
+		unsigned long equilibrium = not_zero(
 			(unsigned long)hop_int->bandwidth * hop_int->bandwidth /
-				power_scale * MEGA * ca->base_rtt,
-			1ul);
+			power_scale * MEGA * ca->base_rtt);
 		unsigned long hop_p_norm = hop_p / equilibrium;
 		if (hop_p_norm > p_norm || i == 0) {
 			p_norm = hop_p_norm;
@@ -322,7 +327,7 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = max(1UL, (unsigned long)(tp->tcp_mstamp - ca->t_prev));
+	dt = not_zero(tp->tcp_mstamp - ca->t_prev);
 	delta_t = min(dt, ca->base_rtt);
 	if (ca->prev_rtt_us <= rtt_us) {
 		rtt_grad = power_scale * (rtt_us - ca->prev_rtt_us) / dt;
