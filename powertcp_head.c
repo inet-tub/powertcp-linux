@@ -81,9 +81,9 @@ POWERTCP_STRUCT(rttptcp_powertcp,
 #undef POWERTCP_STRUCT
 #undef POWERTCP_STRUCT_FIELDS
 
-POWERTCP_PARAM_ATTRS long base_rtt = -1;
-POWERTCP_PARAM_ATTRS long beta = -1;
-POWERTCP_PARAM_ATTRS long expected_flows = 10;
-POWERTCP_PARAM_ATTRS long gamma = 0.9 * gamma_scale;
+POWERTCP_PARAM_ATTRS long base_rtt = default_base_rtt;
+POWERTCP_PARAM_ATTRS long beta = default_beta;
+POWERTCP_PARAM_ATTRS long expected_flows = default_expected_flows;
+POWERTCP_PARAM_ATTRS long gamma = default_gamma;
 POWERTCP_PARAM_ATTRS long hop_bw = default_hop_bw; /* Mbit/s */
 POWERTCP_PARAM_ATTRS long host_bw = fallback_host_bw; /* Mbit/s */
