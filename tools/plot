@@ -222,6 +222,8 @@ def main():
     if args.all_flows:
         y = args.y[0]
 
+        max_yval = None
+        min_yval = None
         yfmt = args.fmt.get(y) or FORMATS.get(y, "-")
         ymax = args.max.get(y)
         ymin = args.min.get(y)
@@ -251,8 +253,19 @@ def main():
                 )
             )
 
+            flow_max_yval = y_vals.max()
+            flow_min_yval = y_vals.min()
+            try:
+                max_yval = max(max_yval, flow_max_yval)
+            except TypeError:
+                max_yval = flow_max_yval
+            try:
+                min_yval = min(min_yval, flow_min_yval)
+            except TypeError:
+                min_yval = flow_min_yval
+
         ax.set_ylabel(LABELS.get(y, y))
-        set_ylim(ax, df[y].min(), df[y].max(), ymin, ymax)
+        set_ylim(ax, min_yval, max_yval, ymin, ymax)
         setup_axis(ax.yaxis, y, yunit)
     else:
         for i, y in enumerate(args.y):
@@ -301,7 +314,7 @@ def main():
                     )
                 )
                 axx.set_ylabel(LABELS.get(y, y))
-                set_ylim(axx, df[y].min(), df[y].max(), ymin, ymax)
+                set_ylim(axx, y_vals.min(), y_vals.max(), ymin, ymax)
                 setup_axis(axx.yaxis, y, yunit)
 
     if len(lines) > 1:
