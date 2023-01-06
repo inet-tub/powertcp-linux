@@ -178,6 +178,7 @@ def main():
     args = argparser.parse_args(remaining_argv, early_args)
 
     df = pd.read_csv(args.csv_file)
+    args.csv_file.close()
 
     df["time"] -= df["time"].min()
     try:
