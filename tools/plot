@@ -92,6 +92,18 @@ class DictStrArg:
         return self._value_type.__name__
 
 
+class OddIntArg(int):
+    def __new__(cls, arg_str):
+        try:
+            self = super().__new__(cls, arg_str)
+        except ValueError:
+            pass
+        else:
+            if self % 2 != 0:
+                return self
+        raise argparse.ArgumentTypeError(f"invalid odd integer value: '{arg_str}'")
+
+
 def check_unit(col, unit):
     units = UNITS.get(col, (None,))
     if unit is None:
@@ -167,7 +179,7 @@ def main():
             const=99,
             default=0,
             nargs="?",
-            type=int,
+            type=OddIntArg,
             help="smooth the plotted data; an optionally given uneven integer number (greater than 2) specifies the filter window size",
         )
         argparser.add_argument("--title")
