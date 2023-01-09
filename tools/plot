@@ -195,6 +195,10 @@ def main():
 
     args = argparser.parse_args(remaining_argv, early_args)
 
+    if args.all_flows and len(args.y) > 1:
+        print("can only plot one data column when plotting multiple flows")
+        return
+
     df = pd.read_csv(args.csv_file)
     args.csv_file.close()
 
@@ -210,10 +214,6 @@ def main():
         pd.options.display.float_format = "{:06.4f}".format
         df.info()
         print(f"\n{df.describe(percentiles=[])}")
-        return
-
-    if args.all_flows and len(args.y) > 1:
-        print("can only plot one data column when plotting multiple flows")
         return
 
     available_hashes = df["hash"].sort_values().unique()
