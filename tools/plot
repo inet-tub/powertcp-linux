@@ -80,16 +80,22 @@ class DictStrArg:
         self._value_type = value_type
 
     def __call__(self, list_str):
-        d = {}
-        for s in list_str.split(","):
-            k, v = s.split(":")
-            if v is not None:
-                v = self._value_type(v)
-            d[k] = v
-        return d
+        def to_key_val(s):
+            kv = s.split(":", 2)
+            if len(kv) < 1 or len(kv[0]) == 0:
+                raise argparse.ArgumentTypeError(f"missing key: '{s}'")
+            if len(kv) < 2 or len(kv[1]) == 0:
+                raise argparse.ArgumentTypeError(
+                    f"missing value for key '{kv[0]}': '{s}'"
+                )
+            try:
+                return kv[0], self._value_type(kv[1])
+            except ValueError:
+                raise argparse.ArgumentTypeError(
+                    f"invalid {self._value_type.__name__} value for key '{kv[0]}': '{kv[1]}'"
+                )
 
-    def __repr__(self):
-        return self._value_type.__name__
+        return dict(to_key_val(s) for s in list_str.split(",") if len(s) > 0)
 
 
 class OddIntArg(int):
