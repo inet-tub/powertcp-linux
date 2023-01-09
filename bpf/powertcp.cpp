@@ -163,8 +163,7 @@ class unique_fd {
 	offsetof(powertcp_bpf::powertcp_bpf__rodata, member)
 const std::unordered_map<std::string, powertcp_param> params = {
 	{ "base_rtt", powertcp_param_long{ POWERTCP_RODATA_OFFSET(base_rtt) } },
-	{ "beta",
-	  powertcp_param_double{ POWERTCP_RODATA_OFFSET(beta), cwnd_scale } },
+	{ "beta", powertcp_param_long{ POWERTCP_RODATA_OFFSET(beta) } },
 	{ "expected_flows",
 	  powertcp_param_long{ POWERTCP_RODATA_OFFSET(expected_flows) } },
 	{ "gamma",

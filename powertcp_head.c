@@ -43,7 +43,7 @@ struct old_cwnd {
 		unsigned long base_rtt;                                                     \
 		unsigned long snd_cwnd;                                                     \
                                                                                             \
-		unsigned long beta;                                                         \
+		unsigned long beta; /* number of packets scaled by cwnd_scale */            \
                                                                                             \
 		struct old_cwnd old_cwnd;                                                   \
                                                                                             \
@@ -82,7 +82,7 @@ POWERTCP_STRUCT(rttptcp_powertcp,
 #undef POWERTCP_STRUCT_FIELDS
 
 POWERTCP_PARAM_ATTRS long base_rtt = default_base_rtt;
-POWERTCP_PARAM_ATTRS long beta = default_beta;
+POWERTCP_PARAM_ATTRS long beta = default_beta; /* Number of packets */
 POWERTCP_PARAM_ATTRS long expected_flows = default_expected_flows;
 POWERTCP_PARAM_ATTRS long gamma = default_gamma;
 POWERTCP_PARAM_ATTRS long hop_bw = default_hop_bw; /* Mbit/s */

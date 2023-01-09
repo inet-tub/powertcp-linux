@@ -445,7 +445,7 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
 		func_prefix##_init(sk);                                        \
                                                                                \
 		ca->base_rtt = ULONG_MAX;                                      \
-		ca->beta = beta < 0 ? ULONG_MAX : beta;                        \
+		ca->beta = beta < 0 ? ULONG_MAX : beta * cwnd_scale;           \
 		ca->host_bw = get_host_bw(sk);                                 \
                                                                                \
 		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART);                \
