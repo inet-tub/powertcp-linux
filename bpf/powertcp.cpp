@@ -27,6 +27,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unistd.h>
 #include <unordered_map>
@@ -241,7 +242,7 @@ void attach_struct_ops(bpf_map *struct_ops)
 	bpf_link__destroy(link);
 }
 
-void delete_struct_ops(const char *map_name)
+void delete_struct_ops(std::string_view map_name)
 {
 	unique_fd fd;
 	__u32 id = 0;
@@ -274,7 +275,7 @@ void delete_struct_ops(const char *map_name)
 		}
 
 		if (info.type == BPF_MAP_TYPE_STRUCT_OPS &&
-		    0 == strcmp(map_name, info.name)) {
+		    map_name == info.name) {
 			break;
 		}
 	}
@@ -508,7 +509,8 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (0 == strcmp("register", argv[optind])) {
+	const auto cmd = std::string_view{ argv[optind] };
+	if (cmd == "register") {
 		if (force) {
 			try {
 				do_unregister();
@@ -522,13 +524,13 @@ int main(int argc, char *argv[])
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
 		}
-	} else if (0 == strcmp("trace", argv[optind])) {
+	} else if (cmd == "trace") {
 		try {
 			do_trace(output_csv);
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
 		}
-	} else if (0 == strcmp("unregister", argv[optind])) {
+	} else if (cmd == "unregister") {
 		if (argc - optind > 2) {
 			fprintf(stderr,
 				"unexpected argument(s) after 'unregister'\n");
