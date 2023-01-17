@@ -2,9 +2,9 @@
 Tested with kernels 5.10 and 5.16.
 
 # Building
-Requires `bpftool`, `clang`, `g++`, libbpf headers (version >= 0.7),
-`llvm-strip`, and `make` to build.  (Packages `bpftool`, `clang`, `g++`,
-`libbpf-dev`, `llvm`, and `make` in a Debian-based distribution.)
+Requires `bpftool`, `clang`, `g++`, libbpf (version >= 0.7), `llvm-strip`, and
+`make` to build. (Packages `bpftool`, `clang`, `g++`, `libbpf-dev`, `llvm`, and
+`make` in a Debian-based distribution.)
 
 The target kernel must be compiled with `CONFIG_DEBUG_INFO_BTF=y` (it usually
 is).
