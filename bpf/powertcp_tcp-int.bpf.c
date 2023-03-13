@@ -27,6 +27,11 @@ static const struct powertcp_int *get_int(struct sock *sk,
 					      ts - prev_int->hops[0].ts) &
 			   max_ts;
 
+		if (dt == 0) {
+			int_impl->cached_int.n_hop = 0;
+			return NULL;
+		}
+
 		int_impl->cached_int.n_hop = 1;
 		/* TCP-INT does not provide an identification for the path. */
 		/* TODO: Evaluate if it makes sense to use the switch ID as path ID.

@@ -222,7 +222,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 		 * smoothing start with a proper value (=p_norm) at the end of this
 		 * function.
 		 */
-		return p_smooth;
+		return 0;
 	}
 
 	/* for each egress port i on the path */
