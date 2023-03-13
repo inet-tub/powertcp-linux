@@ -142,7 +142,7 @@ def setup_axis(axis, col, unit):
     else:
         if unit in ("bit/s", "bytes", "bytes/s"):
             axis.set_major_formatter(ticker.EngFormatter(unit=pretty_unit))
-        elif unit in ("s", "ms", "us"):
+        elif unit in ("s", "ms", "us", "ns"):
             precision = 0
             if unit == "s":
                 precision = 3
