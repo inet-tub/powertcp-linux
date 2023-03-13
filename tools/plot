@@ -154,6 +154,17 @@ def setup_axis(axis, col, unit):
 def main():
     early_argparser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     early_argparser.add_argument(
+        "--all-flows",
+        action="store_true",
+        help="select all flows",
+    )
+    early_argparser.add_argument(
+        "--flow",
+        default=0,
+        type=int,
+        help="select a single flow by zero-based index",
+    )
+    early_argparser.add_argument(
         "--info",
         action="store_true",
         help="show information about the CSV file and exit",
@@ -166,18 +177,7 @@ def main():
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
 
     if not early_args.info:
-        argparser.add_argument(
-            "--all-flows",
-            action="store_true",
-            help="plot a single data column for all flows",
-        )
         argparser.add_argument("--fmt", default={}, type=DictStrArg(str))
-        argparser.add_argument(
-            "--flow",
-            default=0,
-            type=int,
-            help="select a flow from the data by zero-based index",
-        )
         argparser.add_argument("--max", default={}, type=DictStrArg(float))
         argparser.add_argument("--min", default={}, type=DictStrArg(float))
         argparser.add_argument(
@@ -195,7 +195,7 @@ def main():
 
     args = argparser.parse_args(remaining_argv, early_args)
 
-    if args.all_flows and len(args.y) > 1:
+    if not args.info and args.all_flows and len(args.y) > 1:
         print("can only plot one data column when plotting multiple flows")
         return
 
@@ -210,16 +210,16 @@ def main():
     else:
         df = df.drop(columns=["p_norm_scaled", "power_scale"])
 
+    available_hashes = df["hash"].sort_values().unique()
+    if not args.all_flows:
+        selected_hash = available_hashes[args.flow]
+        df = df[df["hash"] == selected_hash]
+
     if args.info:
         pd.options.display.float_format = "{:06.4f}".format
         df.info()
         print(f"\n{df.describe(percentiles=[])}")
         return
-
-    available_hashes = df["hash"].sort_values().unique()
-    if not args.all_flows:
-        selected_hash = available_hashes[args.flow]
-        df = df[df["hash"] == selected_hash]
 
     xunit = args.unit.get(args.x)
     try:
