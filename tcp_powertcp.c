@@ -101,7 +101,7 @@ static unsigned long get_host_bw(struct sock *sk)
 
 static void output_trace_event(struct powertcp_trace_event *trace_event)
 {
-	trace_event->time = ktime_get_ns() / NSEC_PER_USEC;
+	trace_event->time = ktime_get_ns();
 	trace_cong_control(trace_event);
 }
 

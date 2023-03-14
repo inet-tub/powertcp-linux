@@ -83,7 +83,7 @@ static unsigned long get_host_bw(struct sock *sk)
 
 static void output_trace_event(struct powertcp_trace_event *trace_event)
 {
-	trace_event->time = bpf_ktime_get_ns() / NSEC_PER_USEC;
+	trace_event->time = bpf_ktime_get_ns();
 	bpf_ringbuf_output(&trace_events, trace_event, sizeof(*trace_event), 0);
 }
 

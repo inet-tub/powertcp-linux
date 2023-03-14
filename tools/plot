@@ -56,8 +56,9 @@ PRETTY_UNITS = {
 
 UNIT_FACTORS = {
     "bit/s": 8,
-    "ms": 0.001,
-    "s": 0.000001,
+    "us": 0.001,
+    "ms": 0.000001,
+    "s": 0.000000001,
 }
 
 # The first unit specified for a column, if any, is the default unit:
@@ -71,7 +72,7 @@ UNITS = {
     "p_smooth": (None,),
     "qlen": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
-    "time": ("us", "ms", "s"),
+    "time": ("ns", "us", "ms", "s"),
 }
 
 
