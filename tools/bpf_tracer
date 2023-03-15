@@ -40,9 +40,9 @@ run()
 	printf "# %s\n" "$args"
 
 	# shellcheck disable=SC2086
-	./bpf/powertcp register -f tracing $args
+	"${repo_dir}/bpf/powertcp" register -f tracing $args
 
-	./bpf/powertcp trace -C > "$csv_file" &
+	"${repo_dir}/bpf/powertcp" trace -C > "$csv_file" &
 	local trace_pid=$!
 	iperf3 "${iperf3_opts[@]}"
 
@@ -52,6 +52,12 @@ run()
 
 	printf "\n"
 }
+
+repo_dir=${0%/*}/..
+if [[ ! -d ${repo_dir}/tools ]]; then
+	printf "I don’t know where I’m called from\n" >&2
+	exit 2
+fi
 
 iperf3_opts=()
 while [[ $# -gt 0 && $1 != -- ]]; do
@@ -67,11 +73,11 @@ for arg in "$@"; do
 	powertcp_params+=( ["${arg%=*}"]="${arg#*=}" )
 done
 
-./bpf/powertcp unregister || :
-./bpf/tcp-int/code/src/tools/tcp_int unload || :
+"${repo_dir}/bpf/powertcp" unregister || :
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" unload || :
 
-./bpf/tcp-int/code/src/tools/tcp_int load
-./bpf/tcp-int/code/src/tools/tcp_int enable
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" load
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" enable
 
 printf "%d" "$$" > /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
