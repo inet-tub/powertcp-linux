@@ -261,6 +261,7 @@ static unsigned long ptcp_norm_power(struct sock *sk,
 	}
 
 	delta_t = min(delta_t, NSEC_PER_USEC * ca->base_rtt);
+	p_norm = max(p_norm_cutoff, p_norm);
 	p_smooth = p_smooth == 0 ? p_norm :
 					 ewma(delta_t, NSEC_PER_USEC * ca->base_rtt,
 					p_norm, p_smooth);
@@ -341,6 +342,8 @@ rttptcp_norm_power(struct sock *sk, const struct rate_sample *rs,
 		p_norm = (power_scale - min(power_scale, rtt_grad)) * rtt_us /
 			 ca->base_rtt;
 	}
+	p_norm = max(p_norm_cutoff, p_norm);
+
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
 	 */
