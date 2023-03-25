@@ -133,8 +133,6 @@ static void reset(struct sock *sk, enum tcp_ca_event ev)
 {
 	struct powertcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
-	unsigned long cwnd;
-	unsigned long rate;
 
 	if (ev == CA_EVENT_TX_START || ev == CA_EVENT_CWND_RESTART) {
 		unsigned long old_base_rtt = ca->base_rtt;
@@ -147,10 +145,10 @@ static void reset(struct sock *sk, enum tcp_ca_event ev)
 	 * there are frequent CA_EVENT_TX_STARTs.
 	 */
 	if (ev == CA_EVENT_CWND_RESTART) {
-		rate = BITS_TO_BYTES(MEGA * ca->host_bw);
+		unsigned long rate = BITS_TO_BYTES(MEGA * ca->host_bw);
+		unsigned long cwnd = cwnd_scale * rate * ca->base_rtt /
+				     tp->mss_cache / USEC_PER_SEC;
 		set_rate(sk, rate);
-		cwnd = cwnd_scale * rate * ca->base_rtt / tp->mss_cache /
-		       USEC_PER_SEC;
 		set_cwnd(sk, cwnd, NULL);
 		tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
 
