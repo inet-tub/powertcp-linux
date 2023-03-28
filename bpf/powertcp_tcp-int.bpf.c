@@ -21,7 +21,7 @@ static const struct powertcp_int *get_int(struct sock *sk,
 #if USE_SWLAT_AS_TIMESTAMP
 		u32 ts = tint->swlat;
 #else
-		u32 ts = tp->tcp_mstamp * NSEC_PER_USEC;
+		u32 ts = tp->tcp_clock_cache;
 #endif
 		u32 dt = (!prev_int ? tp->srtt_us * (1000u >> 3) :
 					      ts - prev_int->hops[0].ts) &

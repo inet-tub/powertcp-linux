@@ -325,25 +325,27 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = not_zero(tp->tcp_mstamp - ca->t_prev);
-	delta_t = min(dt, ca->base_rtt);
+	dt = not_zero(tp->tcp_clock_cache - ca->t_prev);
+	delta_t = min(dt, ca->base_rtt * NSEC_PER_USEC);
 	if (ca->prev_rtt_us <= rtt_us) {
-		rtt_grad = power_scale * (rtt_us - ca->prev_rtt_us) / dt;
+		rtt_grad = NSEC_PER_USEC * power_scale *
+			   (rtt_us - ca->prev_rtt_us) / dt;
 		p_norm = (rtt_grad + power_scale) * rtt_us / ca->base_rtt;
 	} else {
 		/* Separate code path for negative rtt_grad since BPF does not support
 		 * division by signed numbers.
 		 */
-		rtt_grad = power_scale * (ca->prev_rtt_us - rtt_us) / dt;
+		rtt_grad = NSEC_PER_USEC * power_scale *
+			   (ca->prev_rtt_us - rtt_us) / dt;
 		p_norm = (power_scale - min(power_scale, rtt_grad)) * rtt_us /
 			 ca->base_rtt;
 	}
 	/* powertcp.p_smooth is initialized with 0, we don't want to smooth for the
 	 * very first calculation.
 	 */
-	p_smooth = p_smooth == 0 ?
-				 p_norm :
-				 ewma(delta_t, ca->base_rtt, p_norm, p_smooth);
+	p_smooth = p_smooth == 0 ? p_norm :
+				   ewma(delta_t, NSEC_PER_USEC * ca->base_rtt,
+					p_norm, p_smooth);
 
 	if (tracing_enabled() && trace_event) {
 		trace_event->delta_t = delta_t;
@@ -374,7 +376,7 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 		ca->prev_rtt_us = tp->srtt_us >> 3;
 	}
 
-	ca->t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_clock_cache;
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
@@ -392,7 +394,7 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	ca->last_updated = tp->snd_nxt;
 	ca->prev_rtt_us = get_rtt(sk, rs);
 	// TODO: There are multiple timestamps available here. Is there a better one?
-	ca->t_prev = tp->tcp_mstamp;
+	ca->t_prev = tp->tcp_clock_cache;
 
 	return true;
 }
