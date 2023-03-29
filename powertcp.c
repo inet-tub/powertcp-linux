@@ -335,10 +335,6 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 		 * division by signed numbers.
 		 */
 		rtt_grad = power_scale * (ca->prev_rtt_us - rtt_us) / dt;
-		p_norm = power_scale > rtt_grad ?
-				       (power_scale - rtt_grad) * rtt_us /
-					 ca->base_rtt :
-				       0UL;
 		p_norm = (power_scale - max(power_scale, rtt_grad)) * rtt_us /
 			 ca->base_rtt;
 	}
