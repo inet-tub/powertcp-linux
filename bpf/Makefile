@@ -37,7 +37,7 @@ DEP_CFLAGS := -M -MG -I.. -I$(TCP_INT_DIR)/include
 LDLIBS := $(LIBBPF_LIBS)
 
 .PHONY: all
-all: $(BPF_OBJS) $(PROGS)
+all: $(BPF_OBJS) $(PROGS) tcp_int
 
 .PHONY: clean
 clean:
@@ -62,6 +62,10 @@ $(BPF_DEPS): %.d: %.c
 
 $(PROG_DEPS): %.d: %.cpp
 	$(CXX) $(DEP_CFLAGS) $< -MF $@
+
+.PHONY: tcp_int
+tcp_int:
+	env --unset=VMLINUX_H $(MAKE) -C tcp-int/code/src
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(BPF_DEPS) $(PROG_DEPS)

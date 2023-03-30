@@ -18,7 +18,6 @@ if [ ! -d "$repo_dir/tools" ]; then
 fi
 
 make -C bpf
-make -C bpf/tcp-int/code/src
 
 sudo ./bpf/powertcp unregister || :
 sudo ./bpf/tcp-int/code/src/tools/tcp_int unload || :
