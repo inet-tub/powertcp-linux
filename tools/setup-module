@@ -3,12 +3,17 @@
 # Setup the BPF implementation and TCP-INT and start a screen session to use it
 # (for e.g. iperf3 usage or with already running iperf(3) servers).
 #
-# (Unfortunately) relies on sudo.
 
 set -eu
 
+if [ "$(id -u)" -ne 0 ]; then
+	echo "setup-module: you probably want to execute this as root" >&2
+	exit 2
+fi
+
 repo_dir=${0%/*}/..
 session=$1
+user=${SUDO_USER:-$USER}
 
 shift
 
@@ -17,7 +22,7 @@ if [ ! -d "$repo_dir/tools" ]; then
 	exit 2
 fi
 
-! lsmod | grep -q ^tcp_powertcp || sudo rmmod tcp_powertcp
-sudo insmod "$repo_dir/tcp_powertcp.ko" "$@"
+! lsmod | grep -q ^tcp_powertcp || rmmod tcp_powertcp
+insmod "$repo_dir/tcp_powertcp.ko" "$@"
 
-sudo screen -S "$session.$USER" -c "$repo_dir/tools/screen/$session.screen"
+screen -S "$session.$user" -c "$repo_dir/tools/screen/$session.screen"

@@ -4,8 +4,7 @@ respectively, for usage. This includes (re)loading the implementation and its
 prerequisites and opening a screen session for interactive usage, e.g. for
 calling `iperf`/`iperf3`.
 
-**The scripts are intended and recommended to be called as a non-root user.
-They invoke `sudo` internally where necessary.**
+**The scripts must be called as root or with `sudo`.**
 
 ## Usage
 ```

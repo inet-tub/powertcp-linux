@@ -3,12 +3,17 @@
 # Setup the BPF implementation and TCP-INT and start a screen session to use it
 # (for e.g. iperf3 usage or with already running iperf(3) servers).
 #
-# (Unfortunately) relies on sudo.
 
 set -eu
 
+if [ "$(id -u)" -ne 0 ]; then
+	echo "setup-bpf: you probably want to execute this as root" >&2
+	exit 2
+fi
+
 repo_dir=${0%/*}/..
 session=$1
+user=${SUDO_USER:-$USER}
 
 shift
 
@@ -17,13 +22,13 @@ if [ ! -d "$repo_dir/tools" ]; then
 	exit 2
 fi
 
-sudo ./bpf/powertcp unregister || :
-sudo ./bpf/tcp-int/code/src/tools/tcp_int unload || :
+./bpf/powertcp unregister || :
+./bpf/tcp-int/code/src/tools/tcp_int unload || :
 
-sudo ./bpf/tcp-int/code/src/tools/tcp_int load
-sudo ./bpf/tcp-int/code/src/tools/tcp_int enable
-sudo ./bpf/powertcp register "$@"
+./bpf/tcp-int/code/src/tools/tcp_int load
+./bpf/tcp-int/code/src/tools/tcp_int enable
+./bpf/powertcp register "$@"
 
-echo $$ | sudo tee -a /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
+echo $$ >> /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
-sudo screen -S "$session.$USER" -c "$repo_dir/tools/screen/$session.screen"
+screen -S "$session.$user" -c "$repo_dir/tools/screen/$session.screen"
