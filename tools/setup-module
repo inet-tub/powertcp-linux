@@ -17,8 +17,6 @@ if [ ! -d "$repo_dir/tools" ]; then
 	exit 2
 fi
 
-make
-
 ! lsmod | grep -q ^tcp_powertcp || sudo rmmod tcp_powertcp
 sudo insmod "$repo_dir/tcp_powertcp.ko" "$@"
 

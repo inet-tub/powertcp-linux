@@ -17,8 +17,6 @@ if [ ! -d "$repo_dir/tools" ]; then
 	exit 2
 fi
 
-make -C bpf
-
 sudo ./bpf/powertcp unregister || :
 sudo ./bpf/tcp-int/code/src/tools/tcp_int unload || :
 

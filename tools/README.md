@@ -1,8 +1,8 @@
 # `setup-bpf` and `setup-module`
 The setup scripts prepare the BPF and module implementation of PowerTCP,
-respectively, for usage. This includes (re)building and (re)loading the
-implementation and its prerequisites and finally opening a screen session for
-interactive usage, e.g. for calling `iperf`/`iperf3`.
+respectively, for usage. This includes (re)loading the implementation and its
+prerequisites and opening a screen session for interactive usage, e.g. for
+calling `iperf`/`iperf3`.
 
 **The scripts are intended and recommended to be called as a non-root user.
 They invoke `sudo` internally where necessary.**
