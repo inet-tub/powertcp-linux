@@ -99,6 +99,11 @@ static unsigned long get_host_bw(struct sock *sk)
 	return bw;
 }
 
+static u64 get_tstamp(const struct sock *sk)
+{
+	return tcp_sk(sk)->tcp_clock_cache;
+}
+
 static void output_trace_event(struct powertcp_trace_event *trace_event)
 {
 	trace_event->time = ktime_get_ns();

@@ -17,6 +17,7 @@
 #include <cerrno>
 #include <csignal>
 #include <filesystem>
+#include <fcntl.h>
 #include <linux/bpf.h>
 #include <linux/types.h>
 #include <cstddef>
@@ -232,6 +233,38 @@ void pin_map(bpf_map *map)
 	}
 }
 
+void attach_and_pin_cgroup_prog(bpf_program *prog,
+				std::filesystem::path cgroup_path)
+{
+	const char *prog_name = bpf_program__name(prog);
+
+	std::filesystem::create_directory(cgroup_path);
+
+	const auto cgroup_fd = unique_fd{ open(cgroup_path.c_str(), O_RDONLY) };
+	if (!cgroup_fd) {
+		throw std::system_error(errno, std::generic_category(),
+					"open(cgroup_path)");
+	}
+
+	const auto link = bpf_link_ptr{ bpf_program__attach_cgroup(
+		prog, cgroup_fd.get()) };
+	if (!link) {
+		std::ostringstream oss;
+		oss << "bpf_program__attach_cgroup(" << prog_name << ")";
+		throw std::system_error(errno, std::generic_category(),
+					oss.str());
+	}
+
+	const auto pin_path =
+		powertcp_pin_dir / (std::string{ "link_" } + prog_name);
+	if (bpf_link__pin(link.get(), pin_path.c_str())) {
+		std::ostringstream oss;
+		oss << "bpf_link__pin(" << prog_name << ")";
+		throw std::system_error(errno, std::generic_category(),
+					oss.str());
+	}
+}
+
 void attach_struct_ops(bpf_map *struct_ops)
 {
 	auto link = bpf_link_ptr{ bpf_map__attach_struct_ops(struct_ops) };
@@ -336,10 +369,14 @@ void do_register(int argc, char *argv[])
 	attach_struct_ops(skel->maps.powertcp);
 	attach_struct_ops(skel->maps.rttpowertcp);
 
+	attach_and_pin_cgroup_prog(skel->progs.powertcp_hwtstamp,
+				   TCP_INT_CGROUP_PATH);
+
 	/* struct_ops program maps are "pinned"/kept alive in their own way (see
 	 * the comment in attach_struct_ops()), we only want to pin other maps
 	 * here:
 	 */
+	pin_map(skel->maps.map_powertcp_hwtstamps);
 	pin_map(skel->maps.trace_events);
 }
 

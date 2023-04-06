@@ -46,6 +46,13 @@ POWERTCP_PARAM_ATTRS bool tracing = false;
 extern __u32 LINUX_KERNEL_VERSION __kconfig;
 
 struct {
+	__uint(type, BPF_MAP_TYPE_SK_STORAGE);
+	__uint(map_flags, BPF_F_NO_PREALLOC);
+	__type(key, int);
+	__type(value, u64);
+} map_powertcp_hwtstamps SEC(".maps");
+
+struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, 512 * 1024);
 } trace_events SEC(".maps");
@@ -79,6 +86,17 @@ static unsigned long get_host_bw(struct sock *sk)
 
 	return bw;
 #endif
+}
+
+static u64 get_tstamp(const struct sock *sk)
+{
+	u64 *hwtstamp = bpf_sk_storage_get(&map_powertcp_hwtstamps,
+					   (struct sock *)sk, NULL, 0);
+	if (hwtstamp && *hwtstamp) {
+		return *hwtstamp;
+	}
+
+	return tcp_sk(sk)->tcp_clock_cache;
 }
 
 static void output_trace_event(struct powertcp_trace_event *trace_event)
@@ -141,6 +159,24 @@ void POWERTCP_CONG_OPS_FUNC(powertcp_cong_avoid, struct sock *sk, u32 ack,
 	 *
 	 * This stub is kept here for compatibility with older kernels.
 	 */
+}
+
+SEC("cgroup_skb/ingress")
+int powertcp_hwtstamp(struct __sk_buff *skb)
+{
+	struct bpf_sock *sk = skb->sk;
+	if (sk) {
+		u64 *hwtstamp =
+			bpf_sk_storage_get(&map_powertcp_hwtstamps, sk, NULL,
+					   BPF_SK_STORAGE_GET_F_CREATE);
+		if (hwtstamp) {
+			__u64 hwts = skb->hwtstamp;
+			__u64 ts = skb->tstamp;
+			*hwtstamp = hwts > 0 ? hwts : ts;
+		}
+	}
+
+	return 1;
 }
 
 #include "powertcp_tcp-int.bpf.c"

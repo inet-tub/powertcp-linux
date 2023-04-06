@@ -308,10 +308,10 @@ static int rttptcp_init(struct sock *sk)
 }
 
 static unsigned long
-rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
+rttptcp_norm_power(struct sock *sk, const struct rate_sample *rs,
 		   struct powertcp_trace_event *trace_event)
 {
-	const struct rttptcp_powertcp *ca = inet_csk_ca(sk);
+	struct rttptcp_powertcp *ca = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 	unsigned long dt, rtt_grad, p_norm, delta_t;
 	unsigned long p_smooth = ca->p_smooth;
@@ -321,11 +321,12 @@ rttptcp_norm_power(const struct sock *sk, const struct rate_sample *rs,
 		return p_smooth;
 	}
 
+	ca->t = get_tstamp(sk);
 	rtt_us = get_rtt(sk, rs);
 	/* Timestamps are always increasing here, logically. So we want to have
 	 * unsigned wrap-around when it's time and don't use tcp_stamp_us_delta().
 	 */
-	dt = not_zero(tp->tcp_clock_cache - ca->t_prev);
+	dt = not_zero(ca->t - ca->t_prev);
 	delta_t = min(dt, ca->base_rtt * NSEC_PER_USEC);
 	if (ca->prev_rtt_us <= rtt_us) {
 		rtt_grad = NSEC_PER_USEC * power_scale *
@@ -376,7 +377,7 @@ static void rttptcp_reset(struct sock *sk, enum tcp_ca_event ev)
 		ca->prev_rtt_us = tp->srtt_us >> 3;
 	}
 
-	ca->t_prev = tp->tcp_clock_cache;
+	ca->t_prev = ca->t;
 }
 
 static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
@@ -394,7 +395,7 @@ static bool rttptcp_update_old(struct sock *sk, const struct rate_sample *rs,
 	ca->last_updated = tp->snd_nxt;
 	ca->prev_rtt_us = get_rtt(sk, rs);
 	// TODO: There are multiple timestamps available here. Is there a better one?
-	ca->t_prev = tp->tcp_clock_cache;
+	ca->t_prev = ca->t;
 
 	return true;
 }

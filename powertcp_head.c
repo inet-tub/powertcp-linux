@@ -73,6 +73,7 @@ POWERTCP_STRUCT(rttptcp_powertcp,
 	POWERTCP_STRUCT_FIELDS(
 		u32 last_updated;
 		unsigned long prev_rtt_us;
+		u64 t; /* in ns */
 		u64 t_prev; /* in ns */
 	)
 );
