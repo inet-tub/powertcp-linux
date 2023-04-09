@@ -177,11 +177,6 @@ const std::unordered_map<std::string, powertcp_param> params = {
 
 const std::filesystem::path powertcp_pin_dir = "/sys/fs/bpf/powertcp";
 
-const std::unordered_map<std::string, std::filesystem::path>
-	powertcp_pin_paths = {
-		{ "trace_events", powertcp_pin_dir / "trace_events" },
-	};
-
 volatile std::sig_atomic_t running = true;
 
 void parse_param(std::string param_arg,
@@ -215,6 +210,20 @@ void parse_param(std::string param_arg,
 		oss << "Invalid value '" << value_tok << "' for parameter "
 		    << name_tok << ": out of range";
 		throw std::out_of_range(oss.str());
+	}
+}
+
+void pin_map(bpf_map *map)
+{
+	assert(map != nullptr);
+
+	const char *map_name = bpf_map__name(map);
+	const auto pin_path = powertcp_pin_dir / map_name;
+	if (bpf_map__pin(map, pin_path.c_str())) {
+		std::ostringstream oss;
+		oss << "bpf_map__pin(" << map_name << ")";
+		throw std::system_error(errno, std::generic_category(),
+					oss.str());
 	}
 }
 
@@ -327,13 +336,7 @@ void do_register(int argc, char *argv[])
 	 * the comment in attach_struct_ops()), we only want to pin other maps
 	 * here:
 	 */
-	auto *trace_map =
-		bpf_object__find_map_by_name(skel->obj, "trace_events");
-	if (bpf_map__pin(trace_map,
-			 powertcp_pin_paths.at("trace_events").c_str())) {
-		throw std::system_error(errno, std::generic_category(),
-					"bpf_object__pin");
-	}
+	pin_map(skel->maps.trace_events);
 }
 
 int handle_trace_event(void * /* ctx */, void *data, std::size_t /* data_sz */)
@@ -380,7 +383,7 @@ int handle_trace_event_csv(void * /* ctx */, void *data,
 void do_trace(bool output_csv)
 {
 	auto map_fd = unique_fd{ bpf_obj_get(
-		powertcp_pin_paths.at("trace_events").c_str()) };
+		(powertcp_pin_dir / "trace_events").c_str()) };
 	if (!map_fd) {
 		throw std::system_error(-map_fd.get(), std::generic_category(),
 					"bpf_obj_get");
