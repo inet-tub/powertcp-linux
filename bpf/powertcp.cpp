@@ -38,7 +38,8 @@
 
 namespace
 {
-template <typename T, void (*DeleteFunc)(T *)> struct delete_func_wrapper {
+template <typename T, typename R, R (*DeleteFunc)(T *)>
+struct delete_func_wrapper {
 	void operator()(T *ptr) const noexcept
 	{
 		DeleteFunc(ptr);
@@ -47,7 +48,7 @@ template <typename T, void (*DeleteFunc)(T *)> struct delete_func_wrapper {
 
 template <typename T, void (*DeleteFunc)(T *)>
 using ptr_with_delete_func =
-	std::unique_ptr<T, delete_func_wrapper<T, DeleteFunc> >;
+	std::unique_ptr<T, delete_func_wrapper<T, void, DeleteFunc> >;
 
 using powertcp_bpf_ptr =
 	ptr_with_delete_func<powertcp_bpf, powertcp_bpf__destroy>;
@@ -160,6 +161,10 @@ class unique_fd {
 	int fd_;
 };
 
+using bpf_link_ptr =
+	std::unique_ptr<bpf_link,
+			delete_func_wrapper<bpf_link, int, bpf_link__destroy> >;
+
 #define POWERTCP_RODATA_OFFSET(member)                                         \
 	offsetof(powertcp_bpf::powertcp_bpf__rodata, member)
 const std::unordered_map<std::string, powertcp_param> params = {
@@ -229,8 +234,8 @@ void pin_map(bpf_map *map)
 
 void attach_struct_ops(bpf_map *struct_ops)
 {
-	bpf_link *link = bpf_map__attach_struct_ops(struct_ops);
-	if (libbpf_get_error(link)) {
+	auto link = bpf_link_ptr{ bpf_map__attach_struct_ops(struct_ops) };
+	if (!link) {
 		if (errno == EEXIST) {
 			fprintf(stderr, "%s is already registered, skipping\n",
 				bpf_map__name(struct_ops));
@@ -246,8 +251,7 @@ void attach_struct_ops(bpf_map *struct_ops)
 	/* Have to __disconnect() before __destroy() so the attached struct_ops
 	 * outlive this userspace program.
 	 */
-	bpf_link__disconnect(link);
-	bpf_link__destroy(link);
+	bpf_link__disconnect(link.get());
 }
 
 void delete_struct_ops(std::string_view map_name)
