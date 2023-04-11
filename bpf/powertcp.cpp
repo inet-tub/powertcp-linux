@@ -229,8 +229,7 @@ void attach_struct_ops(bpf_map *struct_ops)
 		}
 
 		std::ostringstream oss;
-		oss << "attach_struct_ops(" << bpf_map__name(struct_ops)
-		    << "): " << strerror(errno);
+		oss << "attach_struct_ops(" << bpf_map__name(struct_ops) << ")";
 		throw std::system_error(errno, std::generic_category(),
 					oss.str());
 	}
