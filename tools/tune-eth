@@ -6,11 +6,20 @@ if [ $# -lt 1 ]; then
 	exit 2
 fi
 
+call_if_found()
+{
+	if command -v "$1" >/dev/null; then
+		"$@"
+	else
+		printf '%s not found in PATH, skipping `%s`\n' "$1" "$*" >&2
+	fi
+}
+
 iface=$1
 
-tuned-adm profile network-latency
+call_if_found tuned-adm profile network-latency
 
-sysctl -qw \
+call_if_found sysctl -qw \
 	vm.overcommit_memory=1 \
 	net.core.busy_poll=50000 \
 	net.core.busy_read=50000 \
@@ -23,21 +32,21 @@ sysctl -qw \
 	net.ipv4.tcp_rmem="8192 87380 16777216" \
 	net.ipv4.tcp_wmem="8192 65536 16777216"
 
-sysctl -qw \
+call_if_found sysctl -qw \
 	net.ipv4.tcp_sack=0 \
 	net.ipv4.tcp_timestamps=0
 
-ethtool -G "$iface" \
+call_if_found ethtool -G "$iface" \
 	tx 8160 \
 	rx 8160
 
-ethtool -K "$iface" \
+call_if_found ethtool -K "$iface" \
 	gso on \
 	lro on \
 	rx on \
 	tso on \
 	tx on
 
-ethtool -C "$iface" \
+call_if_found ethtool -C "$iface" \
 	adaptive-rx off rx-usecs 0 \
 	adaptive-tx off tx-usecs 10
