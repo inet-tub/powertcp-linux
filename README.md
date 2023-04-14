@@ -23,6 +23,11 @@ root@host:PowerTCP-Kernel-Module# echo powertcp > /proc/sys/net/ipv4/tcp_congest
 or use it with e.g. `iperf --tcp-congestion powertcp` or
 `iperf3 --congestion powertcp`.
 
+Read the [step-by-step instructions](doc/step-by-step.md) for an introduction
+on how to use and experiment with the implementation. For further information,
+see [README.md](README.md), [bpf/README.md](bpf/README.md),
+[tools/README.md](tools/README.md), and [doc/](doc).
+
 ## Kernel Module
 ### Building
 To build the kernel module, `make` and kernel headers for the target kernel
