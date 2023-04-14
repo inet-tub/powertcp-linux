@@ -41,6 +41,7 @@ all: $(BPF_OBJS) $(PROGS) tcp_int
 
 .PHONY: clean
 clean:
+	$(MAKE) -C tcp-int/code/src clean
 	$(RM) $(BPF_DEPS) $(BPF_OBJS) $(BPF_SKELS) $(PROG_DEPS) $(PROG_OBJS) $(PROGS) $(VMLINUX_H)
 
 $(VMLINUX_H): $(VMLINUX)
