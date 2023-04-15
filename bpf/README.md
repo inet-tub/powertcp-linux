@@ -9,7 +9,13 @@ Requires `bpftool`, `clang`, `g++`, libbpf (version >= 0.7), `llvm-strip`, and
 The target kernel must be compiled with `CONFIG_DEBUG_INFO_BTF=y` (it usually
 is).
 
-Simply build with 
+After checking out this repository, also checkout TCP-INT which is managed as a
+Git submodule in the tcp-int subdirectory:
+```console
+user@host:~/bpf$ git submodule update --init
+```
+
+Afterwards, simply build with
 ```console
 user@host:~/bpf$ make
 ```
