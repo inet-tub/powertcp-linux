@@ -450,6 +450,7 @@ rttptcp_update_window(struct sock *sk, unsigned long cwnd_old,
                                                                                \
 		func_prefix##_reset(sk, CA_EVENT_CWND_RESTART);                \
                                                                                \
+		require_hwtstamps(sk);                                         \
 		require_pacing(sk);                                            \
 	}                                                                      \
                                                                                \

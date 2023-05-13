@@ -105,6 +105,22 @@ static void output_trace_event(struct powertcp_trace_event *trace_event)
 	bpf_ringbuf_output(&trace_events, trace_event, sizeof(*trace_event), 0);
 }
 
+void require_hwtstamps(struct sock *sk)
+{
+	/* TODO: Access to bpf_setsockopt() is possible for a BPF CC since
+	 * eb18b49ea758. It does not have write access to SO_TIMESTAMPING_NEW yet,
+	 * however (see sol_socket_sockopt()).
+	 *
+	 * Enable this code block conditionally (as in require_pacing()) once
+	 * setting SO_TIMESTAMPING_NEW is allowed.
+	 */
+#if 0
+	int optval = SOF_TIMESTAMPING_RX_HARDWARE;
+	bpf_setsockopt(sk, SOL_SOCKET, SO_TIMESTAMPING_NEW, &optval,
+		       sizeof(optval));
+#endif
+}
+
 static void require_pacing(struct sock *sk)
 {
 	/* When using a kernel version before 6.0 that is manually patched with

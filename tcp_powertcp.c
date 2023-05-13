@@ -110,6 +110,17 @@ static void output_trace_event(struct powertcp_trace_event *trace_event)
 	trace_cong_control(trace_event);
 }
 
+void require_hwtstamps(struct sock *sk)
+{
+	/* TODO: Would it make sense to execute (the equivalent of)
+	 * ioctl(SIOCSHWTSTAMP) for the/a network device here?
+	 */
+
+	int optval = SOF_TIMESTAMPING_RX_HARDWARE;
+	tcp_setsockopt(sk, SOL_SOCKET, SO_TIMESTAMPING_NEW,
+		       KERNEL_SOCKPTR(&optval), sizeof(optval));
+}
+
 static void require_pacing(struct sock *sk)
 {
 	cmpxchg(&sk->sk_pacing_status, SK_PACING_NONE, SK_PACING_NEEDED);
