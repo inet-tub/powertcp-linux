@@ -1,0 +1,4 @@
+#!/bin/sh
+
+printf 'datetime,srcip,srcport,dstip,dstport,thread,interval,cwnd,rate\n'
+iperf -yc -i1 "$@"

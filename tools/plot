@@ -128,7 +128,16 @@ def load_df(csv_file):
     df = pd.read_csv(csv_file)
     csv_file.close()
 
+    # Is this CSV output from iperf?
+    try:
+        df["time"] = df["datetime"] / UNIT_FACTORS["s"]
+    except KeyError:
+        pass
+    else:
+        df["rate"] /= UNIT_FACTORS["bit/s"]
+
     df["time"] -= df["time"].min()
+
     try:
         df["p_norm"] = df["p_norm_scaled"] / df["power_scale"]
     except KeyError:
@@ -234,10 +243,19 @@ def main():
     for ax, csv_file in zip(axs.flat, args.csv_file):
         df = load_df(csv_file)
 
-        available_hashes = df["hash"].sort_values().unique()
+        if "hash" in df:
+            hash_col = "hash"
+        elif "thread" in df:
+            hash_col = "thread"
+        else:
+            print("missing a 'hash' or 'thread' column")
+            return
+
+        available_hashes = df[hash_col].sort_values().unique()
+
         if not args.all_flows:
             selected_hash = available_hashes[args.flow]
-            df = df[df["hash"] == selected_hash]
+            df = df[df[hash_col] == selected_hash]
 
         xunit = args.unit.get(args.x)
         try:
@@ -270,7 +288,7 @@ def main():
                 return e
             df[y] *= UNIT_FACTORS.get(yunit, 1)
 
-            grouped_df = df.groupby("hash")
+            grouped_df = df.groupby(hash_col)
 
             for i, flow_hash in enumerate(available_hashes):
                 flow_df = grouped_df.get_group(flow_hash)
