@@ -49,7 +49,7 @@ LABELS = {
 }
 
 LIMITS = {
-    "rate": (0, 100 * 10 ** 9),
+    "rate": (0, 100 * 10**9),
 }
 
 PRETTY_UNITS = {
