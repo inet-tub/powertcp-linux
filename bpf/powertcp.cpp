@@ -265,7 +265,8 @@ void attach_and_pin_cgroup_prog(bpf_program *prog,
 	}
 
 	const auto pin_path =
-		powertcp_pin_dir / (std::string{ "link_" } + prog_name);
+		powertcp_pin_dir /
+		std::filesystem::path{ "link_" }.concat(prog_name);
 	if (bpf_link__pin(link.get(), pin_path.c_str())) {
 		if (errno == EEXIST) {
 			fprintf(stderr, "%s is already pinned, skipping\n",
