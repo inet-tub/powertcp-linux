@@ -78,7 +78,7 @@ done
 "${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" unload || :
 
 "${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" load
-"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" enable
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" "${TCP_INT_ENABLE:-enable}"
 
 printf "%d" "$$" > /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
