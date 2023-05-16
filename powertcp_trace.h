@@ -13,6 +13,7 @@ struct powertcp_trace_event {
 	unsigned long qlen;
 	__u32 tx_bytes_diff;
 	__u32 delta_t; /* careful: in ns */
+	long rtt_grad; // long instead of unsigned long might truncate a huge rtt_grad
 };
 
 #endif

@@ -407,15 +407,16 @@ int handle_trace_event(void * /* ctx */, void *data, std::size_t /* data_sz */)
 	/*
 	 * Desired alignment in the output, showing the maximum value per data type:
 	 *
-	 * # Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff
-	 * 18446744073709551615   4294967295       4294967295            xxxxxxxxxx   x.yyyyyyyy      x.yyyyyyyy            4294967295    4294967295      4294967295
+	 * # Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff    RTT grad.
+	 * 18446744073709551615   4294967295       4294967295            xxxxxxxxxx   x.yyyyyyyy      x.yyyyyyyy            4294967295    4294967295      4294967295   x.yyyyyyyy
 	 */
 	std::printf(
-		"%20llu   %10u       %10u            %10lu   %10.8f      %10.8f            %10ld    %10u      %10u\n",
+		"%20llu   %10u       %10u            %10lu   %10.8f      %10.8f            %10ld    %10u      %10u   %10.8f\n",
 		ev.time, ev.sock_hash, ev.cwnd, ev.rate * 8 / 1000000,
 		static_cast<double>(ev.p_norm) / power_scale,
 		static_cast<double>(ev.p_smooth) / power_scale, ev.qlen,
-		ev.delta_t, ev.tx_bytes_diff);
+		ev.delta_t, ev.tx_bytes_diff,
+		static_cast<double>(ev.rtt_grad) / power_scale);
 
 	return 0;
 }
@@ -428,11 +429,12 @@ int handle_trace_event_csv(void * /* ctx */, void *data,
 	 */
 	const auto &ev = *static_cast<powertcp_trace_event *>(data);
 
-	std::printf("%llu,%u,%u,%lu,%0f,%0f,%ld,%u,%u\n", ev.time, ev.sock_hash,
-		    ev.cwnd, ev.rate,
+	std::printf("%llu,%u,%u,%lu,%0f,%0f,%ld,%u,%u,%0f\n", ev.time,
+		    ev.sock_hash, ev.cwnd, ev.rate,
 		    static_cast<double>(ev.p_norm) / power_scale,
 		    static_cast<double>(ev.p_smooth) / power_scale, ev.qlen,
-		    ev.delta_t, ev.tx_bytes_diff);
+		    ev.delta_t, ev.tx_bytes_diff,
+		    static_cast<double>(ev.rtt_grad) / power_scale);
 
 	return 0;
 }
@@ -457,10 +459,10 @@ void do_trace(bool output_csv)
 
 	if (output_csv) {
 		std::printf(
-			"time,hash,cwnd,rate,p_norm,p_smooth,qlen,delta_t,tx_bytes_diff\n");
+			"time,hash,cwnd,rate,p_norm,p_smooth,qlen,delta_t,tx_bytes_diff,rtt_grad\n");
 	} else {
 		std::printf(
-			"# Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff\n");
+			"# Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff    RTT grad.\n");
 	}
 
 	while (running) {

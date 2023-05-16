@@ -25,6 +25,7 @@ COLUMNS = (
     "p_smooth",
     "qlen",
     "rate",
+    "rtt_grad",
     "time",
 )
 
@@ -43,6 +44,7 @@ LABELS = {
     "p_smooth": "Smoothed power",
     "qlen": "Queue length",
     "rate": "Pacing rate",
+    "rtt_grad": "RTT gradient",
     "time": "Time",
 }
 
@@ -73,6 +75,7 @@ UNITS = {
     "p_smooth": (None,),
     "qlen": ("bytes",),
     "rate": ("bytes/s", "bit/s"),
+    "rtt_grad": (None,),
     "time": ("ns", "us", "ms", "s"),
 }
 

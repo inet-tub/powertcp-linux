@@ -355,6 +355,7 @@ rttptcp_norm_power(struct sock *sk, const struct rate_sample *rs,
 		trace_event->delta_t = delta_t;
 		trace_event->p_norm = p_norm;
 		trace_event->p_smooth = p_smooth;
+		trace_event->rtt_grad = rtt_grad;
 	}
 
 	return p_smooth;
