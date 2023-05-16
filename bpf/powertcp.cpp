@@ -229,6 +229,12 @@ void pin_map(bpf_map *map)
 	const char *map_name = bpf_map__name(map);
 	const auto pin_path = powertcp_pin_dir / map_name;
 	if (bpf_map__pin(map, pin_path.c_str())) {
+		if (errno == EEXIST) {
+			fprintf(stderr, "%s is already pinned, skipping\n",
+				map_name);
+			return;
+		}
+
 		std::ostringstream oss;
 		oss << "bpf_map__pin(" << map_name << ")";
 		throw std::system_error(errno, std::generic_category(),
@@ -261,6 +267,12 @@ void attach_and_pin_cgroup_prog(bpf_program *prog,
 	const auto pin_path =
 		powertcp_pin_dir / (std::string{ "link_" } + prog_name);
 	if (bpf_link__pin(link.get(), pin_path.c_str())) {
+		if (errno == EEXIST) {
+			fprintf(stderr, "%s is already pinned, skipping\n",
+				prog_name);
+			return;
+		}
+
 		std::ostringstream oss;
 		oss << "bpf_link__pin(" << prog_name << ")";
 		throw std::system_error(errno, std::generic_category(),
