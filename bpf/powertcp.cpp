@@ -14,6 +14,9 @@
 #include <cassert>
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
+#if !defined(LIBBPF_MAJOR_VERSION) || LIBBPF_MAJOR_VERSION < 1
+#include <bpf/libbpf_legacy.h>
+#endif
 #include <cerrno>
 #include <csignal>
 #include <filesystem>
@@ -551,6 +554,13 @@ int main(int argc, char *argv[])
 		std::perror("sigaction");
 		return EXIT_FAILURE;
 	}
+
+#if !defined(LIBBPF_MAJOR_VERSION) || LIBBPF_MAJOR_VERSION < 1
+	if (libbpf_set_strict_mode(LIBBPF_STRICT_ALL)) {
+		std::perror("libbpf_set_strict_mode");
+		return EXIT_FAILURE;
+	}
+#endif
 
 	const auto cmd = std::string_view{ argv[optind] };
 	if (cmd == "register") {
