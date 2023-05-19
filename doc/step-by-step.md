@@ -108,19 +108,19 @@ Inside the screen session, you can, e.g,
 *To record a trace, close any previously opened screen sessions opened for
 [interactive usage](#interactive-usage).*
 
-Record traces (as CSV files) of running `iperf3` with multiple **combinations**
-of algorithm parameters (as root/with sudo):
+Record traces (as CSV files) of running `iperf`/`iperf3` with multiple
+**combinations** of algorithm parameters (as root/with sudo):
 ```
-./tools/bpf_tracer -NZ -c SERVER_IP -C bpf_powertcp -- host_bw=25000 hop_bw=20000 base_rtt=50 beta="2 10" gamma="0.5 0.9"
+./tools/bpf_tracer iperf3 -NZ -c SERVER_IP -C bpf_powertcp -- host_bw=25000 hop_bw=20000 base_rtt=50 beta="2 10" gamma="0.5 0.9"
 ```
 
-`bpf_tracer` takes `iperf3` options followed by PowerTCP algorithm parameters,
-separated by a `--`:
+`bpf_tracer` takes an `iperf`/`iperf3` command line followed by PowerTCP
+algorithm parameters, separated by a `--`:
 ```
-./tools/bpf_tracer IPERF3_OPTS -- POWERTCP_PARAMS
+./tools/bpf_tracer IPERF(3)_CMDLINE -- POWERTCP_PARAMS
 ```
-`IPERF3_OPTS` can contain any `iperf3` *client* options; *it must specify the
-congestion control algorithm to use*.
+`IPERF(3)_CMDLINE` must contain a full `iperf`/`iperf3` *client* command line;
+*it must specify the congestion control algorithm to use*.
 
 `POWERTCP_PARAMS` can contain any of the parameters listed by
 `./bpf/powertcp -h`. Multiple values can be given for each parameter (as a

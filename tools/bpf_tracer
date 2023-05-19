@@ -1,12 +1,13 @@
 #!/bin/bash
 #
 # Usage:
-#   bpf_tracer IPERF3_OPTS -- POWERTCP_PARAMS
+#   bpf_tracer IPERF(3)_CMDLINE -- POWERTCP_PARAMS
 #
 # Example calls:
-#   bpf_tracer -l 1M -w 10M -NZ -c 192.168.13.3 -b 25G -- host_bw=12000 hop_bw=25000 beta="2 10" base_rtt=50
-#   bpf_tracer -l 1M -w 10M -NZ -c 192.168.13.3 -b 25G -- host_bw=12000 hop_bw=25000 beta="1 2 4 8 10" base_rtt="50 500 5000"
-#   bpf_tracer -l 1M -w 10M -NZ -c 192.168.13.3 -b 25G -- host_bw=12000 hop_bw=25000 beta="1 2 4 8 10" base_rtt=50 gamma="0.5 0.7 0.9"
+#   bpf_tracer iperf -N -c 192.168.13.3 -Z bpf_powertcp -- host_bw=12000 hop_bw=25000 beta="2 10" base_rtt=50
+#   bpf_tracer iperf3 -NZ -c 192.168.13.3 -C bpf_powertcp -- host_bw=12000 hop_bw=25000 beta="2 10" base_rtt=50
+#   bpf_tracer iperf3 -NZ -c 192.168.13.3 -C bpf_powertcp -- host_bw=12000 hop_bw=25000 beta="1 2 4 8 10" base_rtt="50 500 5000"
+#   bpf_tracer iperf3 -NZ -c 192.168.13.3 -C bpf_powertcp -- host_bw=12000 hop_bw=25000 beta="1 2 4 8 10" base_rtt=50 gamma="0.5 0.7 0.9"
 #
 
 set -eu
@@ -45,7 +46,7 @@ run()
 
 	"${repo_dir}/bpf/powertcp" trace -C > "$csv_file" &
 	local trace_pid=$!
-	iperf3 "${iperf3_opts[@]}"
+	"${iperf_cmdline[@]}"
 
 	sleep 3
 	kill "$trace_pid"
@@ -60,9 +61,9 @@ if [[ ! -d ${repo_dir}/tools ]]; then
 	exit 2
 fi
 
-iperf3_opts=()
+iperf_cmdline=()
 while [[ $# -gt 0 && $1 != -- ]]; do
-	iperf3_opts+=( "$1" )
+	iperf_cmdline+=( "$1" )
 	shift
 done
 
