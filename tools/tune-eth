@@ -41,6 +41,7 @@ call_if_found ethtool -G "$iface" \
 	rx 8160
 
 call_if_found ethtool -K "$iface" \
+	gro on \
 	gso on \
 	lro on \
 	rx on \
