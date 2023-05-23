@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+
+import argparse
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import pandas as pd
+
+
+def main():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("csv_file", type=argparse.FileType("r"))
+    args = argparser.parse_args()
+
+    df = pd.read_csv(args.csv_file)
+    args.csv_file.close()  # Be nice and close files :-)
+
+    means = pd.pivot_table(df, columns=["gro", "int"], index="cca")
+    errors = pd.pivot_table(df, aggfunc="std", columns=["gro", "int"], index="cca")
+
+    ax = means["avg_bitrate"].plot(
+        capsize=3,
+        kind="bar",
+        xlabel="Congestion control algorithm",
+        yerr=errors["avg_bitrate"],
+        ylabel="Avg. bitrate",
+    )
+    ax.yaxis.set_major_formatter(ticker.EngFormatter(unit="bit/s"))
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
