@@ -1,0 +1,78 @@
+#!/bin/bash
+set -eu
+
+client_runs()
+{
+	local run_str
+	printf -v run_str '\e[u\e[Krun %%i/%i' "$runs"
+
+	progress '\e[s'
+	for ((i = 0; i < runs; ++i)); do
+		progress "$run_str" "$i"
+		avg_bitrate=$(iperf3\
+			--client="$srv_ip" \
+			--congestion="$cca" \
+			--interval=0 \
+			--json \
+			--no-delay \
+			--zerocopy \
+			| jq .end.sum_received.bits_per_second
+		)
+		printf '%s,%s,%s,%s\n' "$cca" "$gro" "$int" "${avg_bitrate%%.*}"
+		sleep 1 # Give the server a moment to be ready again
+	done
+	progress "${run_str}\n" "$runs"
+}
+
+progress()
+{
+	# shellcheck disable=SC2059
+	[[ -t 1 ]] || printf "$@" >&2
+}
+
+server_runs()
+{
+	for ((i = 0; i < runs; ++i)); do
+		iperf3 --one-off --server
+	done
+}
+
+readonly role=$1
+readonly iface=$2
+
+if [[ $role == client ]]; then
+	readonly srv_ip=${3:-}
+	readonly runs=${4:-10}
+	readonly ccas=${5:-cubic}
+
+	netcat -q0 "$srv_ip" 5201 <<-EOF
+		ccas="$ccas"
+		runs="$runs"
+	EOF
+else
+	# Executing arbitrary remote shell code, what could go wrong O:-)
+	eval "$(netcat -q0 -l 5201)"
+fi
+
+readonly repo_dir=${0%/*}/..
+if [[ ! -d ${repo_dir}/tools ]]; then
+	printf "I don’t know where I’m called from\n" >&2
+	exit 2
+fi
+
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" unload &>/dev/null || :
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" load
+printf "%d" "$$" > /sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
+
+printf 'cca,gro,int,avg_bitrate\n'
+for cca in $ccas; do
+	for gro in off on; do
+		ethtool -K "$iface" gro "$gro"
+
+		for int in disable enable; do
+			progress 'cca=%s gro=%s int=%s:\t' "$cca" "$gro" "$int"
+			"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" "$int"
+			"${role}_runs"
+		done
+	done
+done
