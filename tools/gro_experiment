@@ -24,6 +24,15 @@ client_runs()
 	progress "${run_str}\n" "$runs"
 }
 
+die()
+{
+	local r=$1
+	shift
+	# shellcheck disable=SC2059
+	printf "$@" >&2
+	exit "$r"
+}
+
 progress()
 {
 	# shellcheck disable=SC2059
@@ -45,7 +54,7 @@ if [[ $role == client ]]; then
 	readonly runs=${4:-10}
 	readonly ccas=${5:-cubic}
 
-	netcat -q0 "$srv_ip" 5201 <<-EOF
+	netcat -q0 "$srv_ip" 5201 <<-EOF || die 1 "Cannot reach server, experiment must be started there first!\n"
 		ccas="$ccas"
 		runs="$runs"
 	EOF
