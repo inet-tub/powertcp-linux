@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+import argparse
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import pandas as pd
+
+
+def main():
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("csv_file", type=argparse.FileType("r"))
+    args = argparser.parse_args()
+
+    df = pd.read_csv(args.csv_file)
+    args.csv_file.close()  # Be nice and close files :-)
+
+    if df["cca"].nunique() > 1:
+        return "cannot plot for multiple CCAs"
+    cca = df.loc[0, "cca"]
+
+    means_without_int = pd.pivot_table(
+        df.loc[df["int"] == "disable"], index="gro", values="avg_bitrate"
+    )
+    means_with_int = pd.pivot_table(
+        df.loc[df["int"] == "enable"],
+        columns="gro",
+        index="iratio",
+        values="avg_bitrate",
+    )
+
+    fig, ax = plt.subplots(layout="constrained")
+    means_with_int.plot(ax=ax, marker="s", xlabel="iratio", ylabel="Avg. bitrate")
+    for line, avg_bitrate in zip(ax.get_lines(), means_without_int["avg_bitrate"]):
+        ax.axhline(avg_bitrate, color=line.get_color(), linestyle="--")
+
+    fig2, ax2 = plt.subplots(layout="constrained")
+    ax2 = means_with_int.loc[:16].plot(
+        ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. bitrate"
+    )
+    ax2.axhline(
+        means_without_int.loc["off", "avg_bitrate"],
+        color=ax2.get_lines()[0].get_color(),
+        linestyle="--",
+    )
+
+    bitrate_fmt = ticker.EngFormatter(unit="bit/s")
+    ax.yaxis.set_major_formatter(bitrate_fmt)
+    ax2.yaxis.set_major_formatter(bitrate_fmt)
+
+    fig.savefig(f"{cca}-iratio-gro-avg_bitrate.pdf")
+    fig2.savefig(f"{cca}-iratio-gro-avg_bitrate-zoom.pdf")
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
