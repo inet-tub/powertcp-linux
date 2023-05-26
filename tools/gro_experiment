@@ -50,7 +50,7 @@ readonly role=$1
 readonly iface=$2
 
 if [[ $role == client ]]; then
-	readonly srv_ip=${3:-}
+	readonly srv_ip=$3
 	readonly runs=${4:-10}
 	readonly ccas=${5:-cubic}
 
