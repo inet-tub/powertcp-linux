@@ -37,9 +37,9 @@ def main():
         kind="bar",
         rot=0,
         xlabel="Congestion control algorithm",
-        ylabel="Avg. throughput",
+        ylabel="Avg. throughput (bit/s)",
     )
-    ax.yaxis.set_major_formatter(ticker.EngFormatter(unit="bit/s"))
+    ax.yaxis.set_major_formatter(ticker.EngFormatter())
     fig.savefig("cca-gro-int-avg_throughput.pdf")
     plt.show()
 

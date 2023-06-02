@@ -37,7 +37,9 @@ def main():
     )
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
-    means_with_int.plot(ax=ax, marker="s", xlabel="iratio", ylabel="Avg. throughput")
+    means_with_int.plot(
+        ax=ax, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
+    )
     for line, avg_throughput in zip(
         ax.get_lines(), means_without_int["avg_throughput"]
     ):
@@ -45,7 +47,7 @@ def main():
 
     fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax2 = means_with_int.loc[:16].plot(
-        ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. throughput"
+        ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
     )
     ax2.axhline(
         means_without_int.loc["off", "avg_throughput"],
@@ -53,7 +55,7 @@ def main():
         linestyle="--",
     )
 
-    throughput_fmt = ticker.EngFormatter(unit="bit/s")
+    throughput_fmt = ticker.EngFormatter()
     ax.yaxis.set_major_formatter(throughput_fmt)
     ax2.yaxis.set_major_formatter(throughput_fmt)
 
