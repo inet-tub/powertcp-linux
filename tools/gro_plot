@@ -23,6 +23,7 @@ def main():
         ax=ax,
         capsize=3,
         kind="bar",
+        rot=0,
         xlabel="Congestion control algorithm",
         yerr=errors["avg_throughput"],
         ylabel="Avg. throughput",
