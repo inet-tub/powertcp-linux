@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
+FIGSIZE = (5, 2.5)
+
 REPLACEMENTS = {
     "gro": "GRO",
     "int": "INT",
@@ -34,14 +36,14 @@ def main():
         values="avg_throughput",
     )
 
-    fig, ax = plt.subplots(layout="constrained")
+    fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     means_with_int.plot(ax=ax, marker="s", xlabel="iratio", ylabel="Avg. throughput")
     for line, avg_throughput in zip(
         ax.get_lines(), means_without_int["avg_throughput"]
     ):
         ax.axhline(avg_throughput, color=line.get_color(), linestyle="--")
 
-    fig2, ax2 = plt.subplots(layout="constrained")
+    fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax2 = means_with_int.loc[:16].plot(
         ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. throughput"
     )
