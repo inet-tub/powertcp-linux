@@ -6,13 +6,18 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
+REPLACEMENTS = {
+    "gro": "GRO",
+    "int": "INT",
+}
+
 
 def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
     args = argparser.parse_args()
 
-    df = pd.read_csv(args.csv_file)
+    df = pd.read_csv(args.csv_file).rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
     args.csv_file.close()  # Be nice and close files :-)
 
     if df["cca"].nunique() > 1:
@@ -20,11 +25,11 @@ def main():
     cca = df.loc[0, "cca"]
 
     means_without_int = pd.pivot_table(
-        df.loc[df["int"] == "disable"], index="gro", values="avg_throughput"
+        df.loc[df["INT"] == "disable"], index="GRO", values="avg_throughput"
     )
     means_with_int = pd.pivot_table(
-        df.loc[df["int"] == "enable"],
-        columns="gro",
+        df.loc[df["INT"] == "enable"],
+        columns="GRO",
         index="iratio",
         values="avg_throughput",
     )
