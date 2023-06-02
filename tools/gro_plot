@@ -18,7 +18,7 @@ def main():
     means = pd.pivot_table(df, columns=["gro", "int"], index="cca")
     errors = pd.pivot_table(df, aggfunc="std", columns=["gro", "int"], index="cca")
 
-    _fig, ax = plt.subplots(layout="constrained")
+    fig, ax = plt.subplots(layout="constrained")
     ax = means["avg_throughput"].plot(
         ax=ax,
         capsize=3,
@@ -28,6 +28,7 @@ def main():
         ylabel="Avg. throughput",
     )
     ax.yaxis.set_major_formatter(ticker.EngFormatter(unit="bit/s"))
+    fig.savefig("cca-gro-int-avg_throughput.pdf")
     plt.show()
 
 
