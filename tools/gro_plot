@@ -18,12 +18,12 @@ def main():
     means = pd.pivot_table(df, columns=["gro", "int"], index="cca")
     errors = pd.pivot_table(df, aggfunc="std", columns=["gro", "int"], index="cca")
 
-    ax = means["avg_bitrate"].plot(
+    ax = means["avg_throughput"].plot(
         capsize=3,
         kind="bar",
         xlabel="Congestion control algorithm",
-        yerr=errors["avg_bitrate"],
-        ylabel="Avg. bitrate",
+        yerr=errors["avg_throughput"],
+        ylabel="Avg. throughput",
     )
     ax.yaxis.set_major_formatter(ticker.EngFormatter(unit="bit/s"))
     plt.tight_layout()

@@ -9,7 +9,7 @@ client_runs()
 	progress '\e[s'
 	for ((i = 0; i < runs; ++i)); do
 		progress "$run_str" "$i"
-		avg_bitrate=$(
+		avg_throughput=$(
 			iperf3 --client="$srv_ip" \
 				--congestion="$cca" \
 				--interval=0 \
@@ -18,7 +18,7 @@ client_runs()
 				--zerocopy |
 				jq .end.sum_received.bits_per_second
 		)
-		printf '%s,%s,%s,%s\n' "$cca" "$gro" "$int" "${avg_bitrate%%.*}"
+		printf '%s,%s,%s,%s\n' "$cca" "$gro" "$int" "${avg_throughput%%.*}"
 		sleep 1 # Give the server a moment to be ready again
 	done
 	progress "${run_str}\n" "$runs"
@@ -73,7 +73,7 @@ fi
 "${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" load
 printf "%d" "$$" >/sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
-printf 'cca,gro,int,avg_bitrate\n'
+printf 'cca,gro,int,avg_throughput\n'
 for cca in $ccas; do
 	for gro in off on; do
 		ethtool -K "$iface" gro "$gro"
