@@ -29,7 +29,6 @@ def main():
     args.csv_file.close()  # Be nice and close files :-)
 
     means = pd.pivot_table(df, columns=["GRO", "INT"], index="cca")
-    errors = pd.pivot_table(df, aggfunc="std", columns=["GRO", "INT"], index="cca")
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax = means["avg_throughput"].plot(
@@ -38,7 +37,6 @@ def main():
         kind="bar",
         rot=0,
         xlabel="Congestion control algorithm",
-        yerr=errors["avg_throughput"],
         ylabel="Avg. throughput",
     )
     ax.yaxis.set_major_formatter(ticker.EngFormatter(unit="bit/s"))
