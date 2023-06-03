@@ -2,11 +2,12 @@
 
 import argparse
 
+import matplotlib.legend_handler
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import pandas as pd
 
-FIGSIZE = (5, 2.5)
+FIGSIZE = (5, 3)
 
 REPLACEMENTS = {
     "gro": "GRO",
@@ -40,20 +41,35 @@ def main():
     means_with_int.plot(
         ax=ax, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
     )
-    for line, avg_throughput in zip(
-        ax.get_lines(), means_without_int["avg_throughput"]
-    ):
-        ax.axhline(avg_throughput, color=line.get_color(), linestyle="--")
+    hlines = [
+        ax.axhline(
+            avg_throughput, color=line.get_color(), label="INT disabled", linestyle="--"
+        )
+        for line, avg_throughput in zip(
+            ax.get_lines(), means_without_int["avg_throughput"]
+        )
+    ]
+
+    ax.add_artist(ax.get_legend())
+    ax.legend(
+        handler_map={tuple: matplotlib.legend_handler.HandlerTuple(None, pad=0)},
+        handles=[tuple(hlines)],
+        labels=["INT disabled"],
+        loc=(0.667, 0.22),
+    )
 
     fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax2 = means_with_int.loc[:16].plot(
         ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
     )
-    ax2.axhline(
+    hline = ax2.axhline(
         means_without_int.loc["off", "avg_throughput"],
         color=ax2.get_lines()[0].get_color(),
         linestyle="--",
     )
+
+    ax2.add_artist(ax2.get_legend())
+    ax2.legend(handles=[hline], labels=["INT disabled"], loc=(0.015, 0.555))
 
     throughput_fmt = ticker.EngFormatter()
     ax.yaxis.set_major_formatter(throughput_fmt)
