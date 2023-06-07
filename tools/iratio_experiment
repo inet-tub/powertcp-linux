@@ -24,8 +24,7 @@ client_runs()
 				--json \
 				--no-delay \
 				--omit=1 \
-				--time="$run_duration" \
-				--zerocopy |
+				--time="$run_duration" |
 				jq .end.sum_received.bits_per_second
 		)
 		printf '%s,%s,%s,%d,%s\n' "$cca" "$int" "$gro" "$iratio" "${avg_throughput%%.*}"
