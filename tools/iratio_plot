@@ -18,6 +18,9 @@ REPLACEMENTS = {
 def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
+    argparser.add_argument(
+        "--max-iratio", type=int, help="maximum iratio value to plot"
+    )
     args = argparser.parse_args()
 
     df = pd.read_csv(args.csv_file).rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
@@ -27,11 +30,17 @@ def main():
         return "cannot plot for multiple CCAs"
     cca = df.loc[0, "cca"]
 
+    max_iratio = max(df["iratio"])
+    try:
+        max_iratio = min(args.max_iratio, max_iratio)
+    except TypeError:
+        pass
+
     means_without_int = pd.pivot_table(
         df.loc[df["INT"] == "disable"], index="GRO", values="avg_throughput"
     )
     means_with_int = pd.pivot_table(
-        df.loc[df["INT"] == "enable"],
+        df.loc[(df["INT"] == "enable") & (df["iratio"] <= max_iratio)],
         columns="GRO",
         index="iratio",
         values="avg_throughput",
@@ -55,28 +64,13 @@ def main():
         handler_map={tuple: matplotlib.legend_handler.HandlerTuple(None, pad=0)},
         handles=[tuple(hlines)],
         labels=["INT disabled"],
-        loc=(0.667, 0.22),
+        loc="upper left",
     )
 
-    fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
-    ax2 = means_with_int.loc[:16].plot(
-        ax=ax2, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
-    )
-    hline = ax2.axhline(
-        means_without_int.loc["off", "avg_throughput"],
-        color=ax2.get_lines()[0].get_color(),
-        linestyle="--",
-    )
+    ax.yaxis.set_major_formatter(ticker.EngFormatter())
 
-    ax2.add_artist(ax2.get_legend())
-    ax2.legend(handles=[hline], labels=["INT disabled"], loc=(0.015, 0.555))
-
-    throughput_fmt = ticker.EngFormatter()
-    ax.yaxis.set_major_formatter(throughput_fmt)
-    ax2.yaxis.set_major_formatter(throughput_fmt)
-
-    fig.savefig(f"{cca}-iratio-gro-avg_throughput.pdf")
-    fig2.savefig(f"{cca}-iratio-gro-avg_throughput-zoom.pdf")
+    max_iratio_str = "" if args.max_iratio is None else f"_{max_iratio}"
+    fig.savefig(f"{cca}-iratio_upto{max_iratio_str}-gro-avg_throughput.pdf")
 
     plt.show()
 
