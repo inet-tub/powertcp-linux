@@ -14,7 +14,8 @@ client_runs()
 				--congestion="$cca" \
 				--interval=0 \
 				--json \
-				--no-delay |
+				--no-delay \
+				--omit=1 |
 				jq .end.sum_received.bits_per_second
 		)
 		printf '%s,%s,%s,%s\n' "$cca" "$gro" "$int" "${avg_throughput%%.*}"
