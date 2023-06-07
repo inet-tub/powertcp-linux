@@ -65,12 +65,14 @@ shift
 if [[ $role == client ]]; then
 	cca=cubic
 	link_speed=25
+	qdepth_threshold=1500
 	run_duration=10
 	runs=10
 
 	while getopts 'C:r:s:t:' opt; do
 		case $opt in
 		C) cca=$OPTARG ;;
+		q) qdepth_threshold=$OPTARG ;;
 		r) runs=$OPTARG ;;
 		s) link_speed=$OPTARG ;;
 		t) run_duration=$OPTARG ;;
@@ -80,6 +82,7 @@ if [[ $role == client ]]; then
 
 	readonly cca
 	readonly link_speed
+	readonly qdepth_threshold
 	readonly run_duration
 	readonly runs
 
@@ -153,7 +156,7 @@ for iratio in $iratios; do
 			set -e
 			cd "$switch_sde_dir"
 			. set_sde.bash >/dev/null
-			./pkgsrc/switch-p4-16/scripts/tcp_int_cp.py deploy --link "$link_speed" --iratio "$iratio" &>/dev/null
+			./pkgsrc/switch-p4-16/scripts/tcp_int_cp.py deploy --link "$link_speed" --iratio "$iratio" --qdepth_th "$qdepth_threshold" &>/dev/null
 		EOF
 	fi
 
