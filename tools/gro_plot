@@ -22,6 +22,12 @@ REPLACEMENTS = {
 
 def main():
     argparser = argparse.ArgumentParser()
+    argparser.add_argument(
+        "--link-speed",
+        default=25,
+        type=int,
+        help="speed of the measured link in Gbit/s",
+    )
     argparser.add_argument("csv_file", type=argparse.FileType("r"))
     args = argparser.parse_args()
 
@@ -39,6 +45,7 @@ def main():
         xlabel="Congestion control algorithm",
         ylabel="Avg. throughput (bit/s)",
     )
+    ax.set_ylim(0, args.link_speed * 10**9)
     ax.yaxis.set_major_formatter(ticker.EngFormatter())
     fig.savefig("cca-gro-int-avg_throughput.pdf")
     plt.show()
