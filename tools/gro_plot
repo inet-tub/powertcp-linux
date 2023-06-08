@@ -39,7 +39,6 @@ def main():
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax = means["avg_throughput"].plot(
         ax=ax,
-        capsize=3,
         kind="bar",
         rot=0,
         xlabel="Congestion control algorithm",
