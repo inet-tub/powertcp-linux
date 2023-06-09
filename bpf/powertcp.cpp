@@ -457,21 +457,31 @@ void do_trace(bool output_csv)
 					"ring_buffer__new");
 	}
 
+	const char *output_header;
 	if (output_csv) {
-		std::printf(
-			"time,hash,cwnd,rate,p_norm,p_smooth,qlen,delta_t,tx_bytes_diff,rtt_grad\n");
+		output_header =
+			"time,hash,cwnd,rate,p_norm,p_smooth,qlen,delta_t,tx_bytes_diff,rtt_grad";
 	} else {
-		std::printf(
-			"# Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff    RTT grad.\n");
+		output_header =
+			"# Time (us)           Socket hash  CWND (segments)  Pacing rate (Mbit/s)  Norm. power  Smoothed power  Queue length (bytes)  Delta t (ns)  Tx. bytes diff    RTT grad.";
 	}
 
+	auto repeated_timeout = true;
+	std::puts(output_header);
 	while (running) {
 		if (auto err = ring_buffer__poll(ring_buf.get(), 100);
 		    err < 0 && err != -EINTR) {
 			throw std::system_error(-err, std::generic_category(),
 						"ring_buffer__poll");
-		} else if (err == 0) {
-			std::fflush(stdout); /* Flush on timeout */
+		} else if (err == 0 && !repeated_timeout) {
+			/* err == 0 is a timeout */
+			if (!output_csv) {
+				std::puts(output_header);
+			}
+			::fflush(stdout);
+			repeated_timeout = true;
+		} else if (err > 0) {
+			repeated_timeout = false;
 		}
 	}
 }
