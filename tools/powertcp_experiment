@@ -1,0 +1,176 @@
+#!/bin/bash
+
+set -eu
+
+readonly base_srv_port=50000
+
+clients_run()
+{
+	"$tcp_int_tool" trace >"${tmpdir}/tcp_int_trace" &
+	local trace_pid=$!
+
+	local iperf_pids=()
+	for ((i = 0; i < ${#destinations[@]}; ++i)); do
+		iperf --client "${destinations[$i]}" \
+			--interval=1 \
+			--nodelay \
+			--port=$((base_srv_port + 1 + i)) \
+			--reportstyle=C \
+			--tcp-congestion="$cca" \
+			--time="$run_duration" \
+			>"${tmpdir}/$i.iperf" &
+		iperf_pids+=($!)
+	done
+
+	wait "${iperf_pids[@]}"
+
+	progress ' capturing traces …'
+
+	sleep 5 # Wait a bit to catch all trace entries.
+	kill "$trace_pid"
+	wait
+
+	# The last line of the captured `tcp_int trace` is often broken.
+	sed -i '$d' "${tmpdir}/tcp_int_trace"
+
+	if [[ ! -f $tcp_int_csvfile ]]; then
+		prepend_lines '2,2' 'cca,' <"${tmpdir}/tcp_int_trace" >"$tcp_int_csvfile"
+	fi
+	prepend_lines '4,$' "${cca}," <"${tmpdir}/tcp_int_trace" >>"$tcp_int_csvfile"
+
+	if [[ ! -f $iperf_csvfile ]]; then
+		printf 'cca,datetime,srcip,srcport,dstip,dstport,thread,interval,cwnd,rate\n' >"$iperf_csvfile"
+	fi
+	cat "${tmpdir}/"*.iperf | prepend_lines '' "${cca}," >>"$iperf_csvfile"
+
+	rm -f -- "${tmpdir}/"*
+}
+
+die()
+{
+	local r=$1
+	shift
+	# shellcheck disable=SC2059
+	printf "$@" >&2
+	exit "$r"
+}
+
+prepend_lines()
+{
+	local addr=$1
+	local prefix=$2
+	local script
+	printf -v script '%ss/^/%s/;%sp;d' "$addr" "$prefix" "$addr"
+	sed -e "$script"
+}
+
+progress()
+{
+	# shellcheck disable=SC2059
+	printf "$@" >&2
+}
+
+servers_run()
+{
+	local srv_pids=()
+	for ((i = 0; i < ${#destinations[@]}; ++i)); do
+		iperf --port=$((base_srv_port + 1 + i)) --server &
+		srv_pids+=($!)
+	done
+
+	netcat -q0 -l "$base_srv_port"
+	kill "${srv_pids[@]}"
+	wait
+}
+
+readonly role=$1
+shift
+
+if [[ $role == client ]]; then
+	ccas=(bpf_powertcp)
+	powertcp_params=()
+	run_duration=10
+
+	while getopts 'C:P:t:' opt; do
+		case $opt in
+		C) ccas+=("$OPTARG") ;;
+		P)
+			# shellcheck disable=SC2206
+			powertcp_params=($OPTARG)
+			;;
+		t) run_duration=$OPTARG ;;
+		?) exit 2 ;;
+		esac
+	done
+
+	[[ ${#ccas[@]} -gt 1 ]] || ccas+=(cubic)
+
+	readonly ccas
+	readonly powertcp_params
+	readonly run_duration
+
+	shift $((OPTIND - 1))
+else
+	while getopts '' opt; do
+		case $opt in
+		?) exit 2 ;;
+		esac
+	done
+fi
+
+if [[ $role == client ]]; then
+	[[ $# -gt 0 ]] || die 2 'missing destination(s)\n'
+	readonly destinations=("$@")
+elif [[ $# -gt 0 ]]; then
+	die 2 'unexpected arguments -- %s\n' "$*"
+fi
+
+if [[ $role == client ]]; then
+	progress 'Sending experiment parameters to server …\n'
+	netcat -q0 "${destinations[0]}" "$base_srv_port" <<-EOF || die 1 "Cannot reach server, experiment must be started there first!\n"
+		readonly ccas=("${ccas[@]}")
+		readonly destinations=(${destinations[*]})
+	EOF
+else
+	progress 'Waiting for client to send experiment parameters …\n'
+	# Executing arbitrary remote shell code, what could go wrong O:-)
+	eval "$(netcat -q0 -l "$base_srv_port")"
+fi
+
+readonly repo_dir=${0%/*}/..
+if [[ ! -d ${repo_dir}/tools ]]; then
+	printf "I don’t know where I’m called from\n" >&2
+	exit 2
+fi
+
+tmpdir=$(mktemp --directory) || die 1 'failed to create a tempdir'
+readonly tmpdir
+# shellcheck disable=SC2064
+trap "rm -rf -- '$tmpdir'" EXIT HUP INT TERM
+
+readonly powertcp_tool=${repo_dir}/bpf/powertcp
+readonly tcp_int_tool=${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int
+
+printf -v csvfile_prefix '%s-' "${ccas[@]}"
+readonly iperf_csvfile=${csvfile_prefix}iperf.csv
+readonly tcp_int_csvfile=${csvfile_prefix}tcp_int.csv
+rm -f "$iperf_csvfile" "$tcp_int_csvfile"
+
+"$tcp_int_tool" unload &>/dev/null || :
+"$tcp_int_tool" load
+"$tcp_int_tool" enable
+printf "%d" "$$" >/sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
+
+"$powertcp_tool" register -f tracing "${powertcp_params[@]}"
+
+if [[ $role == client ]]; then
+	for cca in "${ccas[@]}"; do
+		progress '%s …' "$cca"
+		clients_run
+		progress ' done.\n'
+	done
+
+	netcat -w1 -q0 "${destinations[0]}" "$base_srv_port"
+else
+	servers_run
+fi
