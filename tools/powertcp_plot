@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+
+import argparse
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib import legend_handler, ticker
+
+FIGSIZE = (4, 2)
+
+REPLACEMENTS = {
+    "DIP:DPORT": "Flow",
+    "QDEPTH(B)": "Queue depth",
+    "TIME(s)": "time",
+    "bpf_powertcp": "PowerTCP",
+    "cca": "CCA",
+    "cubic": "Cubic",
+    "dctcp": "DCTCP",
+    "dstport": "Flow",
+}
+
+LINESTYLES = ["--", "-"]
+
+
+def main():
+    try:
+        mpl.style.use("seaborn-v0_8-colorblind")
+    except Exception as e:
+        print("Failed to change matplotlib style: {}".format(e))
+
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("--mean-window", default=1000, type=int)
+    argparser.add_argument("--since", default=0, type=float)
+    argparser.add_argument("--until", default=None, type=float)
+    argparser.add_argument("iperf_csv_file", type=argparse.FileType("r"))
+    argparser.add_argument("tcp_int_csv_file", type=argparse.FileType("r"))
+    args = argparser.parse_args()
+
+    iperf_df = pd.read_csv(args.iperf_csv_file)
+    args.iperf_csv_file.close()  # Be nice and close files :-)
+
+    ccas = iperf_df["cca"].unique()
+    filename_prefix = "-".join(ccas)
+
+    iperf_df = iperf_df.rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
+    iperf_df["datetime"] = iperf_df["datetime"] - iperf_df.groupby("CCA")[
+        "datetime"
+    ].transform("min")
+    iperf_df["Flow"] -= 50000
+
+    iperf_until = (
+        args.until
+        if args.until is not None
+        else min(iperf_df.groupby("CCA")["datetime"].max())
+    )
+    iperf_df = iperf_df[
+        (iperf_df["datetime"] >= args.since) & (iperf_df["datetime"] <= iperf_until)
+    ]
+    iperf_df["datetime"] -= args.since
+
+    fig1, ax1 = plt.subplots(figsize=FIGSIZE, layout="constrained")
+    cca_rate_lines = {
+        cca_group[0]: tuple(
+            ax1.plot("datetime", "rate", data=flow_df, linestyle=linestyle)[0]
+            for _flow, flow_df in cca_group[1].groupby("Flow")
+        )
+        for linestyle, cca_group in zip(LINESTYLES, iperf_df.groupby("CCA"))
+    }
+
+    ax1.legend(
+        handler_map={tuple: legend_handler.HandlerTuple(None, pad=0)},
+        handles=cca_rate_lines.values(),
+        labels=cca_rate_lines.keys(),
+        loc="upper right",
+    )
+    ax1.set_xlabel("Time (s)")
+    ax1.set_ylabel("Throughput (bit/s)")
+    ax1.yaxis.set_major_formatter(ticker.EngFormatter())
+
+    fig1.savefig(f"{filename_prefix}-throughput.pdf")
+
+    tcp_int_df = pd.read_csv(args.tcp_int_csv_file)
+    args.tcp_int_csv_file.close()
+
+    tcp_int_df.columns = tcp_int_df.columns.str.strip()
+    tcp_int_df = tcp_int_df.rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
+
+    tcp_int_until = (
+        args.until
+        if args.until is not None
+        else min(tcp_int_df.groupby("CCA")["time"].max())
+    )
+    tcp_int_df = tcp_int_df[
+        (tcp_int_df["time"] >= args.since) & (tcp_int_df["time"] <= tcp_int_until)
+    ]
+    tcp_int_df["time"] -= args.since
+
+    fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
+
+    for i, cca_group in enumerate(tcp_int_df.groupby("CCA")):
+        cca, cca_df = cca_group
+
+        qdepth_per_cca_flow = pd.pivot_table(
+            cca_df, index=np.arange(len(cca_df)), values=["Queue depth", "time"]
+        )
+        qdepth_per_cca_flow = qdepth_per_cca_flow.groupby(
+            np.arange(len(qdepth_per_cca_flow)) // args.mean_window
+        ).mean()
+
+        ax2.plot(
+            "time",
+            "Queue depth",
+            data=qdepth_per_cca_flow,
+            linestyle=LINESTYLES[i % len(LINESTYLES)],
+            label=cca,
+        )
+
+    ax2.legend(loc="upper right")
+    ax1.set_xlabel("Time (s)")
+    ax1.set_ylabel("Queue depth (bytes)")
+    ax2.yaxis.set_major_formatter(ticker.EngFormatter())
+
+    fig2.savefig(f"{filename_prefix}-qdepth.pdf")
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
