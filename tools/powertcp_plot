@@ -118,8 +118,8 @@ def main():
         )
 
     ax2.legend(loc="upper right")
-    ax1.set_xlabel("Time (s)")
-    ax1.set_ylabel("Queue depth (bytes)")
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("Queue depth (bytes)")
     ax2.yaxis.set_major_formatter(ticker.EngFormatter())
 
     fig2.savefig(f"{filename_prefix}-qdepth.pdf")
