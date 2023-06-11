@@ -1,0 +1,124 @@
+#!/bin/bash
+
+set -eu
+
+client_runs()
+{
+	for ((i = 0; i < runs; ++i)); do
+		avg_throughput=$(
+			iperf3 --client="$srv_ip" \
+				--congestion="$cca" \
+				--interval=0 \
+				--json \
+				--no-delay \
+				--omit=1 \
+				--time="$run_duration" |
+				jq .end.sum_received.bits_per_second
+		)
+		printf '%s,%d,%f\n' "$cca" "$mtu" "$avg_throughput"
+		sleep 1 # Give the server a moment to be ready again
+	done
+}
+
+die()
+{
+	local r=$1
+	shift
+	# shellcheck disable=SC2059
+	printf "$@" >&2
+	exit "$r"
+}
+
+progress()
+{
+	if [[ $role == server || ! -t 1 ]]; then
+		# shellcheck disable=SC2059
+		printf "$@" >&2
+	fi
+}
+
+server_runs()
+{
+	for ((i = 0; i < runs; ++i)); do
+		iperf3 --one-off --server
+	done
+}
+
+readonly role=$1
+shift
+
+if [[ $role == client ]]; then
+	cca=cubic
+	link_speed=25
+	run_duration=10
+	runs=10
+
+	while getopts 'C:r:s:t:' opt; do
+		case $opt in
+		C) cca=$OPTARG ;;
+		r) runs=$OPTARG ;;
+		t) run_duration=$OPTARG ;;
+		?) exit 2 ;;
+		esac
+	done
+
+	readonly cca
+	readonly run_duration
+	readonly runs
+
+	shift $((OPTIND - 1))
+else
+	while getopts '' opt; do
+		case $opt in
+		?) exit 2 ;;
+		esac
+	done
+fi
+
+readonly iface=$1
+shift
+
+if [[ $role == client ]]; then
+	readonly srv_ip=$1
+	shift
+
+	[[ $# -gt 0 ]] || die 2 'missing MTU(s)\n'
+	readonly mtus=("$@")
+else
+	if [[ $# -gt 0 ]]; then
+		die 2 'unexpected arguments -- %s\n' "$*"
+	fi
+fi
+
+if [[ $role == client ]]; then
+	progress 'Sending experiment parameters to server …\n'
+	netcat -q0 "$srv_ip" 5201 <<-EOF || die 1 "Cannot reach server, experiment must be started there first!\n"
+		cca="$cca"
+		mtus=(${mtus[*]})
+		runs="$runs"
+	EOF
+else
+	progress 'Waiting for client to send experiment parameters …\n'
+	# Executing arbitrary remote shell code, what could go wrong O:-)
+	eval "$(netcat -q0 -l 5201)"
+fi
+
+readonly repo_dir=${0%/*}/..
+if [[ ! -d ${repo_dir}/tools ]]; then
+	die 2 "I don’t know where I’m called from\n"
+fi
+
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" unload &>/dev/null || :
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" load
+"${repo_dir}/bpf/tcp-int/code/src/tools/tcp_int" enable
+printf '%d' "$$" >/sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
+
+ethtool -K "$iface" gro on
+
+[[ $role == server ]] || printf 'cca,mtu,avg_throughput\n'
+
+for mtu in "${mtus[@]}"; do
+	ip link set dev "$iface" mtu "$mtu"
+	sleep 1
+	"${role}_runs"
+done
