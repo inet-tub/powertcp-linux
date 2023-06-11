@@ -33,6 +33,9 @@ clients_run()
 	# The last line of the captured `tcp_int trace` is often broken.
 	sed -i '$d' "${tmpdir}/tcp_int_trace"
 
+	# The last line of the captured iperf outputs is a summary. We don't need it.
+	sed -i '$d' "${tmpdir}/"*.iperf
+
 	if [[ ! -f $tcp_int_csvfile ]]; then
 		prepend_lines '2,2' 'cca,' <"${tmpdir}/tcp_int_trace" >"$tcp_int_csvfile"
 	fi
