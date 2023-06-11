@@ -54,7 +54,11 @@ def main():
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     means_with_int.plot(
-        ax=ax, logx=True, marker="s", xlabel="iratio", ylabel="Avg. throughput (bit/s)"
+        ax=ax,
+        logx=True,
+        marker="s",
+        xlabel="tagratio",
+        ylabel="Avg. throughput (bit/s)",
     )
     hlines = [
         ax.axhline(
