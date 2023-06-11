@@ -12,7 +12,7 @@ clients_run()
 	local iperf_pids=()
 	for ((i = 0; i < ${#destinations[@]}; ++i)); do
 		iperf --client "${destinations[$i]}" \
-			--interval=1 \
+			--interval="$iperf_interval" \
 			--nodelay \
 			--port=$((base_srv_port + 1 + i)) \
 			--reportstyle=C \
@@ -91,12 +91,14 @@ shift
 
 if [[ $role == client ]]; then
 	ccas=(bpf_powertcp)
+	iperf_interval=1
 	powertcp_params=()
 	run_duration=10
 
-	while getopts 'C:P:t:' opt; do
+	while getopts 'C:i:P:t:' opt; do
 		case $opt in
 		C) ccas+=("$OPTARG") ;;
+		i) iperf_interval=$OPTARG ;;
 		P)
 			# shellcheck disable=SC2206
 			powertcp_params=($OPTARG)
@@ -109,6 +111,7 @@ if [[ $role == client ]]; then
 	[[ ${#ccas[@]} -gt 1 ]] || ccas+=(cubic)
 
 	readonly ccas
+	readonly iperf_interval
 	readonly powertcp_params
 	readonly run_duration
 
