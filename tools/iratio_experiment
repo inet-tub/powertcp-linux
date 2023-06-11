@@ -64,13 +64,15 @@ shift
 if [[ $role == client ]]; then
 	cca=cubic
 	link_speed=25
+	mtu=1500
 	qdepth_threshold=1500
 	run_duration=10
 	runs=10
 
-	while getopts 'C:r:s:t:' opt; do
+	while getopts 'C:M:r:s:t:' opt; do
 		case $opt in
 		C) cca=$OPTARG ;;
+		M) mtu=$OPTARG ;;
 		q) qdepth_threshold=$OPTARG ;;
 		r) runs=$OPTARG ;;
 		s) link_speed=$OPTARG ;;
@@ -116,6 +118,7 @@ if [[ $role == client ]]; then
 	netcat -q0 "$srv_ip" 5201 <<-EOF || die 1 "Cannot reach server, experiment must be started there first!\n"
 		cca="$cca"
 		iratios="$iratios"
+		mtu="$mtu"
 		runs="$runs"
 	EOF
 else
@@ -135,6 +138,8 @@ fi
 printf "%d" "$$" >/sys/fs/cgroup/cgroup.tcp-int/cgroup.procs
 
 [[ $role == server ]] || printf 'cca,int,gro,iratio,avg_throughput\n'
+
+ip link set dev "$iface" mtu "$mtu"
 
 int=disable
 iratio=-1
