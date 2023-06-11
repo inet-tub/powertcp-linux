@@ -82,8 +82,7 @@ def main():
 
     ax.yaxis.set_major_formatter(ticker.EngFormatter())
 
-    max_iratio_str = "" if args.max_iratio is None else f"_{max_iratio}"
-    fig.savefig(f"{cca}-iratio_upto{max_iratio_str}-gro-avg_throughput.pdf")
+    fig.savefig(f"{cca}-iratio-gro-avg_throughput.pdf")
 
     plt.show()
 
