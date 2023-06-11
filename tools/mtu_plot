@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+import argparse
+
+import matplotlib as mpl
+import matplotlib.legend_handler
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import pandas as pd
+
+FIGSIZE = (4, 2)
+
+REPLACEMENTS = {
+    "mtu": "MTU",
+}
+
+
+def main():
+    try:
+        mpl.style.use("seaborn-v0_8-colorblind")
+    except Exception as e:
+        print("Failed to change matplotlib style: {}".format(e))
+
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument("csv_file", type=argparse.FileType("r"))
+    argparser.add_argument("--max-mtu", type=int, help="maximum MTU value to plot")
+    args = argparser.parse_args()
+
+    df = pd.read_csv(args.csv_file).rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
+    args.csv_file.close()  # Be nice and close files :-)
+
+    if df["cca"].nunique() > 1:
+        return "cannot plot for multiple CCAs"
+    cca = df.loc[0, "cca"]
+
+    max_mtu = max(df["MTU"])
+    try:
+        max_mtu = min(args.max_mtu, max_mtu)
+    except TypeError:
+        pass
+
+    df = df.loc[df["MTU"] <= max_mtu]
+    df = df.groupby("MTU").mean(numeric_only=True)
+
+    fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
+    ax.plot(df.index, df["avg_throughput"], marker="s")
+
+    ax.set_xlabel("MTU (bytes)")
+    ax.set_ylabel("Avg. throughput (bit/s)")
+    ax.yaxis.set_major_formatter(ticker.EngFormatter())
+
+    fig.savefig(f"{cca}-mtu-avg_throughput.pdf")
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
