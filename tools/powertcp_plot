@@ -103,6 +103,7 @@ def main():
     tcp_int_df = tcp_int_df[
         (tcp_int_df["time"] >= args.since) & (tcp_int_df["time"] <= tcp_int_until)
     ]
+    tcp_int_df["Queue depth"] /= 1000
     tcp_int_df["time"] -= args.since
 
     fig2, ax2 = plt.subplots(figsize=FIGSIZE, layout="constrained")
@@ -134,8 +135,8 @@ def main():
         ncols=len(ccas),
     )
     ax2.set_xlabel("Time (s)")
-    ax2.set_ylabel("Queue depth (bytes)")
-    ax2.yaxis.set_major_formatter(ticker.EngFormatter())
+    ax2.set_ylabel("Queue depth (KB)")
+    ax2.yaxis.set_major_locator(ticker.MaxNLocator(nbins="auto", steps=[5, 10]))
 
     fig2.savefig(f"{filename_prefix}-qdepth.pdf")
 
