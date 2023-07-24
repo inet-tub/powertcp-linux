@@ -45,9 +45,15 @@ def main():
     df = df.groupby("MTU").mean(numeric_only=True)
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
-    ax.plot(df.index, df["avg_throughput"], marker="s")
+    ax.plot(df.index, df["avg_throughput"], label="GRO on", marker="s")
 
     ax.grid(linestyle="--")
+    ax.legend(
+        bbox_to_anchor=(0.45, 1.1, 0.55, 0),
+        borderaxespad=0,
+        loc="lower left",
+        mode="expand",
+    )
     ax.set_xlabel("MTU (bytes)")
     ax.set_ylabel("Avg. throughput (bit/s)")
     ax.yaxis.set_major_formatter(ticker.EngFormatter())

@@ -44,6 +44,8 @@ def main():
     except TypeError:
         pass
 
+    df["GRO"] = "GRO " + df["GRO"]
+
     means_with_int = pd.pivot_table(
         df.loc[(df["INT"] == "enable") & (df["iratio"] <= max_iratio)],
         columns="GRO",
@@ -61,7 +63,13 @@ def main():
     )
 
     ax.grid(linestyle="--")
-    ax.legend()
+    ax.legend(
+        bbox_to_anchor=(-0.15, 1.1, 1.15, 0),
+        borderaxespad=0,
+        loc="lower left",
+        mode="expand",
+        ncols=df["GRO"].nunique(),
+    )
 
     iratio_fmt = ticker.LogFormatter(base=2)
     ax.xaxis.set_major_formatter(iratio_fmt)

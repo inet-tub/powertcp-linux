@@ -73,10 +73,14 @@ def main():
 
     ax1.grid(linestyle="--")
     ax1.legend(
+        bbox_to_anchor=(-0.15, 1.1, 1.15, 0),
+        borderaxespad=0,
         handler_map={tuple: legend_handler.HandlerTuple(None, pad=0)},
         handles=cca_rate_lines.values(),
         labels=cca_rate_lines.keys(),
-        loc="upper right",
+        loc="lower left",
+        mode="expand",
+        ncols=len(ccas),
     )
     ax1.set_xlabel("Time (s)")
     ax1.set_ylabel("Throughput (bit/s)")
@@ -121,7 +125,13 @@ def main():
         )
 
     ax2.grid(linestyle="--")
-    ax2.legend(loc="upper right")
+    ax2.legend(
+        bbox_to_anchor=(-0.25, 1.1, 1.25, 0),
+        borderaxespad=0,
+        loc="lower left",
+        mode="expand",
+        ncols=len(ccas),
+    )
     ax2.set_xlabel("Time (s)")
     ax2.set_ylabel("Queue depth (bytes)")
     ax2.yaxis.set_major_formatter(ticker.EngFormatter())
