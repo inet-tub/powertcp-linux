@@ -44,9 +44,6 @@ def main():
     except TypeError:
         pass
 
-    means_without_int = pd.pivot_table(
-        df.loc[df["INT"] == "disable"], index="GRO", values="avg_throughput"
-    )
     means_with_int = pd.pivot_table(
         df.loc[(df["INT"] == "enable") & (df["iratio"] <= max_iratio)],
         columns="GRO",
@@ -62,23 +59,9 @@ def main():
         xlabel="tagratio",
         ylabel="Avg. throughput (bit/s)",
     )
-    hlines = [
-        ax.axhline(
-            avg_throughput, color=line.get_color(), label="INT disabled", linestyle="--"
-        )
-        for line, avg_throughput in zip(
-            ax.get_lines(), means_without_int["avg_throughput"]
-        )
-    ]
 
-    ax.add_artist(ax.get_legend())
     ax.grid(linestyle="--")
-    ax.legend(
-        handler_map={tuple: matplotlib.legend_handler.HandlerTuple(None, pad=0)},
-        handles=[tuple(hlines)],
-        labels=["INT disabled"],
-        loc="upper left",
-    )
+    ax.legend()
 
     iratio_fmt = ticker.LogFormatter(base=2)
     ax.xaxis.set_major_formatter(iratio_fmt)
