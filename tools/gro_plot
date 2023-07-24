@@ -42,6 +42,8 @@ def main():
     df = pd.read_csv(args.csv_file).rename(columns=REPLACEMENTS).replace(REPLACEMENTS)
     args.csv_file.close()  # Be nice and close files :-)
 
+    df["avg_throughput"] /= 10**9
+
     means = pd.pivot_table(df, columns=["GRO", "INT"], index="cca")
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
@@ -50,11 +52,11 @@ def main():
         kind="bar",
         rot=0,
         xlabel="Congestion control algorithm",
-        ylabel="Avg. throughput (bit/s)",
+        ylabel="Avg. throughput (Gbps)",
     )
     ax.grid(linestyle="--")
-    ax.set_ylim(0, args.link_speed * 10**9)
-    ax.yaxis.set_major_formatter(ticker.EngFormatter())
+    ax.set_ylim(0, args.link_speed)
+    ax.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
     fig.savefig("cca-gro-int-avg_throughput.pdf")
     plt.show()
 

@@ -43,6 +43,7 @@ def main():
 
     df = df.loc[df["MTU"] <= max_mtu]
     df = df.groupby("MTU").mean(numeric_only=True)
+    df["avg_throughput"] /= 10**9
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax.plot(df.index, df["avg_throughput"], label="GRO on", marker="s")
@@ -55,8 +56,8 @@ def main():
         mode="expand",
     )
     ax.set_xlabel("MTU (bytes)")
-    ax.set_ylabel("Avg. throughput (bit/s)")
-    ax.yaxis.set_major_formatter(ticker.EngFormatter())
+    ax.set_ylabel("Avg. throughput (Gbps)")
+    ax.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
 
     fig.savefig(f"{cca}-mtu-avg_throughput.pdf")
 

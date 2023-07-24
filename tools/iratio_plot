@@ -44,6 +44,7 @@ def main():
     except TypeError:
         pass
 
+    df["avg_throughput"] /= 10**9
     df["GRO"] = "GRO " + df["GRO"]
 
     means_with_int = pd.pivot_table(
@@ -59,7 +60,7 @@ def main():
         logx=True,
         marker="s",
         xlabel="tagratio",
-        ylabel="Avg. throughput (bit/s)",
+        ylabel="Avg. throughput (Gbps)",
     )
 
     ax.grid(linestyle="--")
@@ -78,7 +79,7 @@ def main():
     ax.xaxis.set_major_locator(ticker.LogLocator(base=2))
     ax.xaxis.set_minor_locator(ticker.LogLocator(base=2))
 
-    ax.yaxis.set_major_formatter(ticker.EngFormatter())
+    ax.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
 
     fig.savefig(f"{cca}-iratio-gro-avg_throughput.pdf")
 

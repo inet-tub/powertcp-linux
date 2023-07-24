@@ -51,6 +51,7 @@ def main():
         "datetime"
     ].transform("min")
     iperf_df["Flow"] -= 50000
+    iperf_df["rate"] /= 10**9
 
     iperf_until = (
         args.until
@@ -83,8 +84,8 @@ def main():
         ncols=len(ccas),
     )
     ax1.set_xlabel("Time (s)")
-    ax1.set_ylabel("Throughput (bit/s)")
-    ax1.yaxis.set_major_formatter(ticker.EngFormatter())
+    ax1.set_ylabel("Throughput (Gbps)")
+    ax1.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
 
     fig1.savefig(f"{filename_prefix}-throughput.pdf")
 
