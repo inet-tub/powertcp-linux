@@ -72,12 +72,10 @@ def main():
         ncols=df["GRO"].nunique(),
     )
 
-    iratio_fmt = ticker.LogFormatter(base=2)
-    ax.xaxis.set_major_formatter(iratio_fmt)
-    ax.xaxis.set_minor_formatter(iratio_fmt)
+    ax.xaxis.set_major_formatter(ticker.LogFormatter(base=2))
 
     ax.xaxis.set_major_locator(ticker.LogLocator(base=2))
-    ax.xaxis.set_minor_locator(ticker.LogLocator(base=2))
+    ax.xaxis.set_minor_locator(ticker.NullLocator())
 
     ax.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
 
