@@ -60,7 +60,7 @@ def main():
         logx=True,
         marker="s",
         xlabel="tagratio",
-        ylabel="Avg. throughput (Gbps)",
+        ylabel="Throughput (Gbps)",
     )
 
     ax.grid(linestyle="--")

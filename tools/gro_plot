@@ -52,7 +52,7 @@ def main():
         kind="bar",
         rot=0,
         xlabel="Congestion control algorithm",
-        ylabel="Avg. throughput (Gbps)",
+        ylabel="Throughput (Gbps)",
     )
     ax.grid(linestyle="--")
     ax.set_ylim(0, args.link_speed)
