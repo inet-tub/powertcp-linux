@@ -47,6 +47,7 @@ def main():
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
     ax.plot(df.index, df["avg_throughput"], marker="s")
 
+    ax.grid(linestyle="--")
     ax.set_xlabel("MTU (bytes)")
     ax.set_ylabel("Avg. throughput (bit/s)")
     ax.yaxis.set_major_formatter(ticker.EngFormatter())

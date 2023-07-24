@@ -71,6 +71,7 @@ def main():
         for linestyle, cca_group in zip(LINESTYLES, iperf_df.groupby("CCA"))
     }
 
+    ax1.grid(linestyle="--")
     ax1.legend(
         handler_map={tuple: legend_handler.HandlerTuple(None, pad=0)},
         handles=cca_rate_lines.values(),
@@ -119,6 +120,7 @@ def main():
             label=cca,
         )
 
+    ax2.grid(linestyle="--")
     ax2.legend(loc="upper right")
     ax2.set_xlabel("Time (s)")
     ax2.set_ylabel("Queue depth (bytes)")

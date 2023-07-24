@@ -52,6 +52,7 @@ def main():
         xlabel="Congestion control algorithm",
         ylabel="Avg. throughput (bit/s)",
     )
+    ax.grid(linestyle="--")
     ax.set_ylim(0, args.link_speed * 10**9)
     ax.yaxis.set_major_formatter(ticker.EngFormatter())
     fig.savefig("cca-gro-int-avg_throughput.pdf")

@@ -72,6 +72,7 @@ def main():
     ]
 
     ax.add_artist(ax.get_legend())
+    ax.grid(linestyle="--")
     ax.legend(
         handler_map={tuple: matplotlib.legend_handler.HandlerTuple(None, pad=0)},
         handles=[tuple(hlines)],
