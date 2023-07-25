@@ -57,6 +57,8 @@ def main():
     )
     ax.set_xlabel("MTU (bytes)")
     ax.set_ylabel("Throughput (Gbps)")
+
+    ax.xaxis.set_major_locator(ticker.FixedLocator([1500, 4000, 7000, 9000]))
     ax.yaxis.set_major_locator(ticker.FixedLocator([1, 10, 15, 20, 25, 50, 100]))
 
     fig.savefig(f"{cca}-mtu-avg_throughput.pdf")
