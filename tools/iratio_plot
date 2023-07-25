@@ -10,6 +10,9 @@ import pandas as pd
 
 FIGSIZE = (4, 3)
 
+LINESTYLES = ["--", "-"]
+MARKERS = ["x", "s"]
+
 REPLACEMENTS = {
     "gro": "GRO",
     "int": "INT",
@@ -45,23 +48,19 @@ def main():
         pass
 
     df["avg_throughput"] /= 10**9
-    df["GRO"] = "GRO " + df["GRO"]
-
-    means_with_int = pd.pivot_table(
-        df.loc[(df["INT"] == "enable") & (df["iratio"] <= max_iratio)],
-        columns="GRO",
-        index="iratio",
-        values="avg_throughput",
-    )
+    df = df.loc[(df["INT"] == "enable") & (df["iratio"] <= max_iratio)]
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
-    means_with_int.plot(
-        ax=ax,
-        logx=True,
-        marker="s",
-        xlabel="tagratio",
-        ylabel="Throughput (Gbps)",
-    )
+    for linestyle, marker, gro_group in zip(LINESTYLES, MARKERS, df.groupby("GRO")):
+        gro, gro_df = gro_group
+        gro_df = gro_df.groupby("iratio").mean(numeric_only=True)
+        ax.semilogx(
+            "avg_throughput",
+            data=gro_df,
+            label=f"GRO {gro}",
+            linestyle=linestyle,
+            marker=marker,
+        )
 
     ax.grid(linestyle="--")
     ax.legend(
@@ -71,6 +70,8 @@ def main():
         mode="expand",
         ncols=df["GRO"].nunique(),
     )
+    ax.set_xlabel("tagratio")
+    ax.set_ylabel("Throughput (Gbps)")
 
     mid_iratio = df["iratio"].unique()
     mid_iratio = mid_iratio[len(mid_iratio) // 2]
