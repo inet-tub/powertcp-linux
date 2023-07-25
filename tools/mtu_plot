@@ -46,6 +46,9 @@ def main():
     df["avg_throughput"] /= 10**9
 
     fig, ax = plt.subplots(figsize=FIGSIZE, layout="constrained")
+    ax.plot(
+        [max_mtu], [df.loc[max_mtu]]
+    )  # Quick-n-dirty force same color as for GRO=on in iratio plot
     ax.plot(df.index, df["avg_throughput"], label="GRO on", marker="s")
 
     ax.grid(linestyle="--")
