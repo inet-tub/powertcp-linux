@@ -25,6 +25,8 @@ LINESTYLES = ["--", "-"]
 
 
 def main():
+    plt.rcParams.update({"pdf.fonttype": 42})
+
     try:
         mpl.style.use("seaborn-v0_8-colorblind")
     except Exception as e:
