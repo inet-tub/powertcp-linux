@@ -39,17 +39,17 @@ values in the units specified above.
 Parameters can be set to different values from within the screen session
 without calling `setup-bpf`
 ```console
-root@host:PowerTCP-Kernel-Module# ./bpf/powertcp -f register base_rtt=100 hop_bw=25000 host_bw=25000
+root@host:powertcp-linux# ./bpf/powertcp -f register base_rtt=100 hop_bw=25000 host_bw=25000
 ```
 or `setup-module` again
 ```console
-root@host:PowerTCP-Kernel-Module# ./tools/reinsmod base_rtt=100 hop_bw=25000 host_bw=25000
+root@host:powertcp-linux# ./tools/reinsmod base_rtt=100 hop_bw=25000 host_bw=25000
 ```
 
 ## Examples
 ```console
-user@host:PowerTCP-Kernel-Module$ ./tools/setup-bpf iperf-client base_rtt=123 hop_bw=100000 host_bw=100000
-user@host:PowerTCP-Kernel-Module$ ./tools/setup-bpf iperf-servers
-user@host:PowerTCP-Kernel-Module$ ./tools/setup-module iperf-client base_rtt=456 host_bw=10000
-user@host:PowerTCP-Kernel-Module$ ./tools/setup-module iperf-servers
+user@host:powertcp-linux$ ./tools/setup-bpf iperf-client base_rtt=123 hop_bw=100000 host_bw=100000
+user@host:powertcp-linux$ ./tools/setup-bpf iperf-servers
+user@host:powertcp-linux$ ./tools/setup-module iperf-client base_rtt=456 host_bw=10000
+user@host:powertcp-linux$ ./tools/setup-module iperf-servers
 ```
