@@ -1,0 +1,70 @@
+cff-version: 1.2.0
+authors:
+- family-names: "Hinz"
+  given-names: "Jörn-Thorben"
+  orcid: "https://orcid.org/0009-0005-6588-3873"
+title: "PowerTCP for Linux"
+url: "https://github.com/inet-tub/powertcp-linux"
+message: "If you use this software, please cite it as below."
+preferred-citation:
+  type: conference-paper
+  authors:
+  - family-names: "Hinz"
+    given-names: "Jörn-Thorben"
+    orcid: "https://orcid.org/0009-0005-6588-3873"
+  - family-names: "Vamsi"
+    given-names: "Addanki"
+    orcid: "https://orcid.org/0000-0002-0577-0413"
+  - family-names: "Györgyi"
+    given-names: "Csaba"
+    orcid: "https://orcid.org/0000-0002-8083-3277"
+  - family-names: "Jepsen"
+    given-names: "Theo"
+    orcid: "https://orcid.org/0000-0002-5845-5089"
+  - family-names: "Schmid"
+    given-names: "Stefan"
+    orcid: "https://orcid.org/0000-0002-7798-1711"
+  doi: "10.1145/3609021.3609295"
+  journal: "eBPF '23: Proceedings of the 1st Workshop on eBPF and Kernel Extensions"
+  publisher:
+    name: "Association for Computing Machinery"
+  month: 9
+  start: 1
+  end: 7
+  title: "TCP's Third Eye: Leveraging eBPF for Telemetry-Powered Congestion Control"
+  year: 2023
+references:
+  - authors:
+      - family-names: "Vamsi"
+        given-names: "Addanki"
+      - family-names: "Michel"
+        given-names: "Oliver"
+      - family-names: "Schmid"
+        given-names: "Stefan"
+    title: "PowerTCP: Pushing the Performance Limits of Datacenter Networks"
+    start: 51
+    end: 70
+    journal: "19th USENIX Symposium on Networked Systems Design and Implementation (NSDI 22)"
+    year: 2022
+    month: 4
+    type: conference-paper
+  - authors:
+      - family-names: "Jereczek"
+        given-names: "Grzegorz"
+      - family-names: "Jepsen"
+        given-names: "Theo"
+      - family-names: "Wass"
+        given-names: "Simon"
+      - family-names: "Pujari"
+        given-names: "Bimmy"
+      - family-names: "Zhen"
+        given-names: "Jerry"
+      - family-names: "Lee"
+        given-names: "Jeongkeun"
+    title: "TCP-INT: Lightweight Network Telemetry with TCP Transport"
+    start: 58
+    end: 60
+    journal: "Proceedings of the SIGCOMM'22 Poster and Demo Sessions"
+    year: 2022
+    month: 10
+    type: conference-paper
