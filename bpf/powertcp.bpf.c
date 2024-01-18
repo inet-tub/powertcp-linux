@@ -107,18 +107,10 @@ static void output_trace_event(struct powertcp_trace_event *trace_event)
 
 void require_hwtstamps(struct sock *sk)
 {
-	/* TODO: Access to bpf_setsockopt() is possible for a BPF CC since
-	 * eb18b49ea758. It does not have write access to SO_TIMESTAMPING_NEW yet,
-	 * however (see sol_socket_sockopt()).
-	 *
-	 * Enable this code block conditionally (as in require_pacing()) once
-	 * setting SO_TIMESTAMPING_NEW is allowed.
+	/* Nothing to do here. For a BPF program to have __sk_buff.hwtstamp
+	 * populated, only ioctl(SIOCSHWTSTAMP) must be executed on the network
+	 * device. No bpf_setsockopt(SO_TIMESTAMPING_*) is necessary.
 	 */
-#if 0
-	int optval = SOF_TIMESTAMPING_RX_HARDWARE;
-	bpf_setsockopt(sk, SOL_SOCKET, SO_TIMESTAMPING_NEW, &optval,
-		       sizeof(optval));
-#endif
 }
 
 static void require_pacing(struct sock *sk)

@@ -26,12 +26,16 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <linux/bpf.h>
+#include <linux/net_tstamp.h>
+#include <linux/sockios.h>
 #include <linux/types.h>
 #include <memory>
+#include <net/if.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sys/ioctl.h>
 #include <system_error>
 #include <unistd.h>
 #include <unordered_map>
@@ -351,6 +355,50 @@ void delete_struct_ops(std::string_view map_name)
 	}
 }
 
+void enable_hwts(std::string_view dev)
+{
+	auto fd = unique_fd{ socket(AF_UNIX, SOCK_DGRAM, 0) };
+	if (!fd) {
+		throw std::system_error{
+			std::make_error_code(std::errc{ errno }), "socket"
+		};
+	}
+
+	hwtstamp_config hwts_conf = {};
+	hwts_conf.rx_filter = HWTSTAMP_FILTER_ALL;
+
+	ifreq ifr = {};
+	ifr.ifr_data = reinterpret_cast<__caddr_t>(&hwts_conf);
+
+	dev.copy(ifr.ifr_name, sizeof(ifr.ifr_name) - 1);
+	assert(ifr.ifr_name[sizeof(ifr.ifr_name) - 1] == '\0');
+	if (std::size(dev) != std::strlen(ifr.ifr_name)) {
+		std::ostringstream oss;
+		oss << "device name too long: " << dev;
+		throw std::invalid_argument{ oss.str() };
+	}
+
+	if (ioctl(fd.get(), SIOCSHWTSTAMP, &ifr)) {
+		const auto err = std::make_error_code(std::errc{ errno });
+		std::ostringstream oss;
+
+		if (err == std::errc::not_supported) {
+			oss << dev << " does not support hardware timestamping";
+			throw std::runtime_error{ oss.str() };
+		} else {
+			oss << dev << ": ioctl(SIOCSHWTSTAMP)";
+			throw std::system_error{ err, oss.str() };
+		}
+	}
+}
+
+void do_enable_hwts(const arg_vector &args)
+{
+	for (auto &&arg : args) {
+		enable_hwts(arg);
+	}
+}
+
 void do_register(const arg_vector &args)
 {
 	auto skel = powertcp_bpf_ptr{ powertcp_bpf__open() };
@@ -504,10 +552,14 @@ void handle_signal(int /* sig */)
 void usage(const char *prog, FILE *outfile)
 {
 	fprintf(outfile,
-		"Usage: %1$s [OPTION...] register [PARAMETER...]\n"
+		"Usage: %1$s enable-hwts [DEVICE...]\n"
+		"       %1$s [OPTION...] register [PARAMETER...]\n"
 		"       %1$s [OPTION...] trace | unregister\n"
 		"\n"
 		"COMMANDS\n"
+		"   enable-hwts\n"
+		"      Enable hardware timestamping on the given network device(s).\n"
+		"\n"
 		"   register\n"
 		"      Register the PowerTCP eBPF programs, optionally setting algorithm\n"
 		"      parameters.\n"
@@ -542,6 +594,7 @@ void usage(const char *prog, FILE *outfile)
 		"EXAMPLE\n"
 		"\n"
 		"   # %1$s register expected_flows=1\n"
+		"   # %1$s enable-hwts eno1 eno2 eno3\n"
 		"\n",
 		prog);
 }
@@ -593,7 +646,14 @@ int main(int argc, char *argv[])
 	const auto cmd = std::string_view{ argv[optind] };
 	const auto args = arg_vector(argv + optind + 1, argv + argc);
 
-	if (cmd == "register") {
+	if (cmd == "enable-hwts") {
+		try {
+			do_enable_hwts(args);
+		} catch (const std::exception &e) {
+			fprintf(stderr, "%s\n", e.what());
+			return EXIT_FAILURE;
+		}
+	} else if (cmd == "register") {
 		if (force) {
 			try {
 				do_unregister();

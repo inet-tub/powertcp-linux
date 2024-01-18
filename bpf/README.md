@@ -7,9 +7,13 @@
 > the TCP-INT repository: [Switch Code](https://github.com/p4lang/p4app-TCP-INT/tree/v0.2.0-alpha#switch-code).
 
 > [!NOTE]
-> The `bpf_rttpowertcp` in the kernel module is functional but lacks access to
-> higher-precision hardware timestamps (due to limitations in the kernel). This
-> might change in upcoming kernel releases.
+> The `bpf_rttpowertcp` is fully functional when the network interface(s)
+> support hardware timestamping. You can check the support
+> with (as root/with `sudo`)
+> ```
+> ethtool -T INTERFACE | grep hardware-receive
+> ```
+> which should output `hardware-receive`.
 
 Following are step-by-step instructions on how to use and experiment with the
 PowerTCP eBPF implementation. All commands listed here are assumed to be executed
@@ -90,6 +94,11 @@ The preparation steps need to be executed on both client and server.
    
    Disable stripping of the object files (for more human-readable `objdump`
    output) by appending `LLVM_STRIP=/bin/true` to the above invocation of `make`.
+3. For `bpf_rttpowertcp`, enable hardware timestamping on the relevant network
+   interface(s) *IFACE(s)* (as root/with `sudo`):
+   ```
+   ./bpf/powertcp enable-hwts IFACE(s)
+   ```
 
 ## On the server
 
