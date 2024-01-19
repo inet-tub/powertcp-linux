@@ -37,6 +37,7 @@
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "powertcp_trace.h"
 
@@ -49,6 +50,8 @@ struct delete_func_wrapper {
 		DeleteFunc(ptr);
 	}
 };
+
+using arg_vector = std::vector<std::string_view>;
 
 template <typename T, void (*DeleteFunc)(T *)>
 using ptr_with_delete_func =
@@ -188,10 +191,10 @@ const std::filesystem::path powertcp_pin_dir = "/sys/fs/bpf/powertcp";
 
 volatile std::sig_atomic_t running = true;
 
-void parse_param(std::string param_arg,
+void parse_param(std::string_view param_arg,
 		 powertcp_bpf::powertcp_bpf__rodata *rodata)
 {
-	std::istringstream iss(std::move(param_arg));
+	std::istringstream iss(std::string{ param_arg });
 
 	std::string name_tok;
 	std::getline(iss, name_tok, '=');
@@ -348,15 +351,15 @@ void delete_struct_ops(std::string_view map_name)
 	}
 }
 
-void do_register(int argc, char *argv[])
+void do_register(const arg_vector &args)
 {
 	auto skel = powertcp_bpf_ptr{ powertcp_bpf__open() };
 	if (!skel) {
 		throw std::system_error(errno, std::generic_category(), "open");
 	}
 
-	for (int i = 0; i < argc; ++i) {
-		parse_param(argv[i], skel->rodata);
+	for (auto &&arg : args) {
+		parse_param(arg, skel->rodata);
 	}
 
 	auto map_fd = unique_fd(
@@ -588,6 +591,8 @@ int main(int argc, char *argv[])
 #endif
 
 	const auto cmd = std::string_view{ argv[optind] };
+	const auto args = arg_vector(argv + optind + 1, argv + argc);
+
 	if (cmd == "register") {
 		if (force) {
 			try {
@@ -598,7 +603,7 @@ int main(int argc, char *argv[])
 		}
 
 		try {
-			do_register(argc - optind - 1, argv + optind + 1);
+			do_register(args);
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
 			return EXIT_FAILURE;
