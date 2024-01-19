@@ -601,12 +601,14 @@ int main(int argc, char *argv[])
 			do_register(argc - optind - 1, argv + optind + 1);
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
+			return EXIT_FAILURE;
 		}
 	} else if (cmd == "trace") {
 		try {
 			do_trace(output_csv);
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
+			return EXIT_FAILURE;
 		}
 	} else if (cmd == "unregister") {
 		if (argc - optind > 2) {
@@ -618,6 +620,7 @@ int main(int argc, char *argv[])
 			do_unregister();
 		} catch (const std::exception &e) {
 			fprintf(stderr, "%s\n", e.what());
+			return EXIT_FAILURE;
 		}
 	} else {
 		usage(argv[0], stderr);
