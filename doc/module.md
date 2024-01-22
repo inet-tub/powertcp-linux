@@ -31,7 +31,7 @@ The preparation steps need to be executed on both client and server.
    apt install gcc linux-headers-$(uname -r) make
    ```
    
-   Optionally tune the network interface for low latency etc. (as root/with
+   Ideally, tune the network interface *IFACE* for low latency etc. (as root/with
    `sudo`):
    ```
    apt install ethtool procps tuned

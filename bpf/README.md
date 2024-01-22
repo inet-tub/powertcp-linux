@@ -73,8 +73,8 @@ The preparation steps need to be executed on both client and server.
    apt install 'bpftool|linux-tools-common$' clang g++ gcc libbpf-dev llvm make
    ```
    
-   Optionally tune the network interface *IFACE* for low latency etc. (as
-   root/with `sudo`):
+   Ideally, tune the network interface *IFACE* for low latency etc. (as root/with
+   `sudo`):
    ```
    apt install ethtool procps tuned
    ./tools/tune-eth IFACE
