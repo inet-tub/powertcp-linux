@@ -26,22 +26,21 @@ When loaded into the kernel, the congestion control algorithms are called
 
 The preparation steps need to be executed on both client and server.
 
-Install required packages (as root/with `sudo`):
-```
-apt install gcc linux-headers-$(uname -r) make
-```
-
-Optionally tune the network interface for low latency etc. (as root/with
-`sudo`):
-```
-apt install ethtool procps tuned
-./tools/tune-eth IFACE
-```
-
-Build the PowerTCP module implementation:
-```
-make
-```
+1. Install required packages (as root/with `sudo`):
+   ```
+   apt install gcc linux-headers-$(uname -r) make
+   ```
+   
+   Optionally tune the network interface for low latency etc. (as root/with
+   `sudo`):
+   ```
+   apt install ethtool procps tuned
+   ./tools/tune-eth IFACE
+   ```
+2. Build the PowerTCP module implementation:
+   ```
+   make
+   ```
 
 ## On the server
 

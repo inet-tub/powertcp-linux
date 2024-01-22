@@ -68,29 +68,28 @@ git submodule update --init
 
 The preparation steps need to be executed on both client and server.
 
-Install required packages (as root/with `sudo`):
-```
-apt install 'bpftool|linux-tools-common$' clang g++ gcc libbpf-dev llvm make
-```
-
-Optionally tune the network interface *IFACE* for low latency etc. (as
-root/with `sudo`):
-```
-apt install ethtool procps tuned
-./tools/tune-eth IFACE
-```
-
-Build the PowerTCP BPF program and TCP-INT:
-```
-make -C bpf/
-```
-
-If you are using a modified TCP-INT P4 application that replaces the `swlat`
-telemetry field with a timestamp, append `USE_SWLAT_AS_TIMESTAMP=1` to the
-above invocation of `make`.
-
-Disable stripping of the object files (for more human-readable `objdump`
-output) by appending `LLVM_STRIP=/bin/true` to the above invocation of `make`.
+1. Install required packages (as root/with `sudo`):
+   ```
+   apt install 'bpftool|linux-tools-common$' clang g++ gcc libbpf-dev llvm make
+   ```
+   
+   Optionally tune the network interface *IFACE* for low latency etc. (as
+   root/with `sudo`):
+   ```
+   apt install ethtool procps tuned
+   ./tools/tune-eth IFACE
+   ```
+2. Build the PowerTCP BPF program and TCP-INT:
+   ```
+   make -C bpf/
+   ```
+   
+   If you are using a modified TCP-INT P4 application that replaces the `swlat`
+   telemetry field with a timestamp, append `USE_SWLAT_AS_TIMESTAMP=1` to the
+   above invocation of `make`.
+   
+   Disable stripping of the object files (for more human-readable `objdump`
+   output) by appending `LLVM_STRIP=/bin/true` to the above invocation of `make`.
 
 ## On the server
 
